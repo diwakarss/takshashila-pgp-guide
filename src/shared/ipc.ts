@@ -22,7 +22,11 @@ export const IPC = {
   /** main → renderer: per-file import progress. */
   corpusImportProgress: 'corpus:import:progress',
   /** Semantic search over the brain; returns cited chunks. */
-  brainSearch: 'brain:search'
+  brainSearch: 'brain:search',
+  /** Which engine is connected and whether it's usable right now. */
+  engineStatus: 'engine:status',
+  /** Ask the tutor: retrieve + grounded, cited answer. */
+  tutorAsk: 'tutor:ask'
 } as const
 
 export type AppInfo = {
@@ -65,4 +69,17 @@ export type SearchHit = {
   title: string | null
   type: string | null
   score: number
+}
+
+export type EngineStatus = {
+  id: string
+  label: string
+  qualityTier: 'high' | 'medium' | 'low'
+  available: boolean
+}
+
+export type TutorAnswer = {
+  answer: string
+  sources: SearchHit[]
+  engineId: string
 }

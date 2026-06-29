@@ -4,9 +4,11 @@ import {
   type AppInfo,
   type BrainStats,
   type CorpusStatus,
+  type EngineStatus,
   type ImportProgress,
   type ImportResult,
-  type SearchHit
+  type SearchHit,
+  type TutorAnswer
 } from '../shared/ipc'
 
 // The ONLY surface the renderer can see. contextIsolation keeps this behind a
@@ -20,6 +22,8 @@ const api = {
   brainStats: (): Promise<BrainStats> => ipcRenderer.invoke(IPC.brainStats),
   importCorpus: (): Promise<ImportResult> => ipcRenderer.invoke(IPC.corpusImport),
   search: (query: string): Promise<SearchHit[]> => ipcRenderer.invoke(IPC.brainSearch, query),
+  engineStatus: (): Promise<EngineStatus> => ipcRenderer.invoke(IPC.engineStatus),
+  askTutor: (question: string): Promise<TutorAnswer> => ipcRenderer.invoke(IPC.tutorAsk, question),
 
   /** Subscribe to import progress. Returns an unsubscribe fn. */
   onImportProgress: (cb: (p: ImportProgress) => void): (() => void) => {

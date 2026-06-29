@@ -1,18 +1,28 @@
 import { useCallback, useEffect, useState } from 'react'
-import type { AppInfo, BrainStats, CorpusStatus, ImportProgress, SearchHit } from '../../shared/ipc'
+import type {
+  AppInfo,
+  BrainStats,
+  CorpusStatus,
+  EngineStatus,
+  ImportProgress,
+  TutorAnswer
+} from '../../shared/ipc'
 
 // Phase 0 proof harness. Proves all four eng-review spikes in one screen you
 // can click: the brain boots, the real corpus imports, the embedder runs, and
-// a question returns cited lessons. Phase 1+ grows this into the real Tutor.
+// a question returns a CITED answer from your engine. Phase 1+ grows this into
+// the real Tutor.
 export function App(): JSX.Element {
   const [bridge, setBridge] = useState<'checking' | 'ok' | 'down'>('checking')
   const [info, setInfo] = useState<AppInfo | null>(null)
   const [corpus, setCorpus] = useState<CorpusStatus | null>(null)
   const [stats, setStats] = useState<BrainStats | null>(null)
+  const [engine, setEngine] = useState<EngineStatus | null>(null)
 
   const refresh = useCallback(async () => {
     setStats(await window.pgp.brainStats())
     setCorpus(await window.pgp.corpusStatus())
+    setEngine(await window.pgp.engineStatus())
   }, [])
 
   useEffect(() => {
@@ -41,9 +51,9 @@ export function App(): JSX.Element {
       </header>
 
       <div className="grid">
-        <SystemCard bridge={bridge} stats={stats} corpus={corpus} info={info} />
+        <SystemCard bridge={bridge} stats={stats} corpus={corpus} engine={engine} info={info} />
         <ImportCard corpus={corpus} stats={stats} onDone={refresh} />
-        <AskCard ready={(stats?.chunks ?? 0) > 0} />
+        <AskCard ready={(stats?.chunks ?? 0) > 0} engine={engine} />
       </div>
     </div>
   )
@@ -53,9 +63,10 @@ function SystemCard(props: {
   bridge: 'checking' | 'ok' | 'down'
   stats: BrainStats | null
   corpus: CorpusStatus | null
+  engine: EngineStatus | null
   info: AppInfo | null
 }): JSX.Element {
-  const { bridge, stats, corpus, info } = props
+  const { bridge, stats, corpus, engine, info } = props
   return (
     <section className="card">
       <h2>System</h2>
@@ -79,6 +90,17 @@ function SystemCard(props: {
             <span className="pill ok">{corpus.fileCount} lessons</span>
           ) : (
             <span className="pill danger">not found</span>
+          )
+        ) : (
+          <span className="pill pending">…</span>
+        )}
+      </Row>
+      <Row label="AI engine">
+        {engine ? (
+          engine.available ? (
+            <span className="pill ok">{engine.label}</span>
+          ) : (
+            <span className="pill danger">{engine.label} — not found</span>
           )
         ) : (
           <span className="pill pending">…</span>
@@ -128,7 +150,7 @@ function ImportCard(props: {
       <h2>Course corpus</h2>
       <p className="muted small">
         Import the cohort lessons + transcripts into your local brain. Embeds on this
-        machine the first time (downloads the model once).
+        machine the first time — a few minutes, one time only.
       </p>
 
       {busy && progress && (
@@ -153,17 +175,24 @@ function ImportCard(props: {
   )
 }
 
-function AskCard(props: { ready: boolean }): JSX.Element {
-  const { ready } = props
+function AskCard(props: { ready: boolean; engine: EngineStatus | null }): JSX.Element {
+  const { ready, engine } = props
   const [q, setQ] = useState('')
-  const [hits, setHits] = useState<SearchHit[] | null>(null)
+  const [result, setResult] = useState<TutorAnswer | null>(null)
   const [busy, setBusy] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  const engineReady = engine?.available ?? false
+  const canAsk = ready && engineReady && !busy && q.trim().length > 0
 
   const ask = async (): Promise<void> => {
     if (!q.trim()) return
     setBusy(true)
+    setError(null)
     try {
-      setHits(await window.pgp.search(q.trim()))
+      setResult(await window.pgp.askTutor(q.trim()))
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e))
     } finally {
       setBusy(false)
     }
@@ -173,42 +202,58 @@ function AskCard(props: { ready: boolean }): JSX.Element {
     <section className="card span-2">
       <h2>Ask the course</h2>
       {!ready && <p className="muted small">Import the corpus first, then ask anything about it.</p>}
+      {ready && !engineReady && (
+        <p className="danger small">
+          Your AI engine ({engine?.label}) isn’t reachable. In dev, launch from a terminal where
+          `claude` is on your PATH.
+        </p>
+      )}
       <div className="ask-row">
         <input
           className="input"
           placeholder="e.g. why do outright bans fail in public policy?"
           value={q}
-          disabled={!ready || busy}
+          disabled={!ready || !engineReady || busy}
           onChange={(e) => setQ(e.target.value)}
-          onKeyDown={(e) => e.key === 'Enter' && ask()}
+          onKeyDown={(e) => e.key === 'Enter' && canAsk && ask()}
         />
-        <button className="btn primary" disabled={!ready || busy || !q.trim()} onClick={ask}>
-          {busy ? 'Searching…' : 'Ask'}
+        <button className="btn primary" disabled={!canAsk} onClick={ask}>
+          {busy ? 'Thinking…' : 'Ask'}
         </button>
       </div>
 
-      {hits && hits.length === 0 && <p className="muted small">No matches found.</p>}
-      {hits && hits.length > 0 && (
-        <ol className="hits">
-          {hits.map((h) => (
-            <li key={h.id} className="hit">
-              <div className="hit-head">
-                <span className="hit-title">{h.title ?? h.slug}</span>
-                <span className="source-chip">
-                  {h.type ?? 'page'} · {Math.round(h.score * 100)}%
-                </span>
-              </div>
-              <p className="hit-text">{snippet(h.text)}</p>
-              <span className="muted small">{h.slug}</span>
-            </li>
-          ))}
-        </ol>
+      {error && <p className="danger small">Couldn’t answer: {error}</p>}
+
+      {result && (
+        <div className="answer">
+          <p className="answer-text">{result.answer}</p>
+          {result.sources.length > 0 && (
+            <div className="sources">
+              <span className="muted small">Sources</span>
+              <ol className="hits">
+                {result.sources.map((h, i) => (
+                  <li key={h.id} className="hit">
+                    <div className="hit-head">
+                      <span className="hit-title">
+                        [{i + 1}] {h.title ?? h.slug}
+                      </span>
+                      <span className="source-chip">
+                        {h.type ?? 'page'} · {Math.round(h.score * 100)}%
+                      </span>
+                    </div>
+                    <p className="hit-text">{snippet(h.text)}</p>
+                  </li>
+                ))}
+              </ol>
+            </div>
+          )}
+        </div>
       )}
     </section>
   )
 }
 
-function snippet(text: string, max = 280): string {
+function snippet(text: string, max = 240): string {
   const clean = text.replace(/\s+/g, ' ').trim()
   return clean.length > max ? clean.slice(0, max) + '…' : clean
 }

@@ -2,6 +2,8 @@ import { app, shell, BrowserWindow, ipcMain } from 'electron'
 import { join } from 'path'
 import { IPC, type AppInfo } from '../shared/ipc'
 import { studyBrain } from './services/studyBrain'
+import { runTutor } from './services/tutor'
+import { agentCliEngine } from './engine/agentCli'
 
 // ┌─────────────────────────────────────────────────────────────────────┐
 // │ Main process. Owns the native window + privileged work (brain, fs,   │
@@ -75,6 +77,23 @@ function registerIpc(): void {
       if (!event.sender.isDestroyed()) event.sender.send(IPC.corpusImportProgress, p)
     })
   })
+
+  ipcMain.handle(IPC.engineStatus, async () => {
+    const caps = agentCliEngine.capabilities
+    return {
+      id: caps.id,
+      label: caps.label,
+      qualityTier: caps.qualityTier,
+      available: await agentCliEngine.isAvailable()
+    }
+  })
+
+  ipcMain.handle(IPC.tutorAsk, (_e, question: string) =>
+    runTutor(question, {
+      search: (q, limit) => studyBrain.search(q, limit),
+      engine: agentCliEngine
+    })
+  )
 }
 
 app.whenReady().then(() => {
