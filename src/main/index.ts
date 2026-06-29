@@ -1,6 +1,7 @@
 import { app, shell, BrowserWindow, ipcMain } from 'electron'
 import { join } from 'path'
 import { IPC, type AppInfo } from '../shared/ipc'
+import { studyBrain } from './services/studyBrain'
 
 // ┌─────────────────────────────────────────────────────────────────────┐
 // │ Main process. Owns the native window + privileged work (brain, fs,   │
@@ -61,6 +62,18 @@ function registerIpc(): void {
       node: process.versions.node,
       platform: `${process.platform} ${process.arch}`
     }
+  })
+
+  ipcMain.handle(IPC.corpusStatus, () => studyBrain.corpusStatus())
+  ipcMain.handle(IPC.brainStats, () => studyBrain.stats())
+  ipcMain.handle(IPC.brainSearch, (_e, query: string) => studyBrain.search(query))
+
+  // Import streams per-file progress back to the renderer that asked, then
+  // resolves with the final totals.
+  ipcMain.handle(IPC.corpusImport, async (event) => {
+    return studyBrain.importCorpus((p) => {
+      if (!event.sender.isDestroyed()) event.sender.send(IPC.corpusImportProgress, p)
+    })
   })
 }
 
