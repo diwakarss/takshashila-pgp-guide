@@ -1,19 +1,31 @@
 import { app } from 'electron'
 import { join } from 'node:path'
 import { existsSync, readdirSync } from 'node:fs'
+import { randomUUID } from 'node:crypto'
 import { Brain } from '../brain/brain'
 import { nomicEmbedder } from '../embed/embedder'
 import { importDirectory, type ImportProgress, type ImportResult } from '../corpus/import'
 import { classifyCourse } from '../corpus/course'
 import { imageEngine } from '../illustrate/imageEngine'
+import { agentCliEngine } from '../engine/agentCli'
+import { runTutor, summariseReply, type TurnContext } from './tutor'
 import type {
+  AskRequest,
+  AskResult,
   BrainStats,
   CorpusStatus,
   CourseSummary,
   IllustrationImage,
   IllustrationSpec,
-  SearchHit
+  SearchHit,
+  Thread,
+  ThreadDetail
 } from '../../shared/ipc'
+
+function makeTitle(question: string): string {
+  const t = question.replace(/\s+/g, ' ').trim()
+  return t.length > 60 ? t.slice(0, 60) + '…' : t
+}
 
 function slugify(s: string): string {
   return s
@@ -97,6 +109,55 @@ class StudyBrainService {
     return brain.search(q, { limit, courseCode })
   }
 
+  // ── conversation ────────────────────────────────────────────────────────
+
+  /** Ask in a thread (new if no threadId). Loads prior turns as context, runs
+   *  the tutor, persists the turn, and returns it. Course is locked per thread. */
+  async ask(req: AskRequest): Promise<AskResult> {
+    const brain = await this.open()
+    let threadId = req.threadId
+    let courseCode = req.courseCode
+    let history: TurnContext[] = []
+
+    if (threadId) {
+      const thread = await brain.getThread(threadId)
+      if (thread) {
+        courseCode = thread.courseCode ?? undefined // locked to the thread's course
+        history = thread.turns.map((t) => ({ question: t.question, summary: summariseReply(t.answer) }))
+      }
+    } else {
+      threadId = randomUUID()
+      await brain.createThread({
+        id: threadId,
+        tab: 'tutor',
+        courseCode: courseCode ?? null,
+        title: makeTitle(req.question)
+      })
+    }
+
+    const reply = await runTutor(
+      { question: req.question, courseCode, history },
+      { search: (q, l, c) => this.search(q, l, c), engine: agentCliEngine }
+    )
+    const turn = await brain.appendTurn(threadId, { id: randomUUID(), question: req.question, answer: reply })
+    return { threadId, turn }
+  }
+
+  async listThreads(tab = 'tutor'): Promise<Thread[]> {
+    const brain = await this.open()
+    return brain.listThreads(tab)
+  }
+
+  async getThread(id: string): Promise<ThreadDetail | null> {
+    const brain = await this.open()
+    return brain.getThread(id)
+  }
+
+  async deleteThread(id: string): Promise<void> {
+    const brain = await this.open()
+    await brain.deleteThread(id)
+  }
+
   /**
    * Resolve a slide's illustration: reuse a library concept if one matches
    * (instant, free), otherwise generate it once, save it to the library, and
@@ -135,6 +196,16 @@ class StudyBrainService {
   async conceptCount(): Promise<number> {
     const brain = await this.open()
     return brain.conceptCount()
+  }
+
+  async clearLibrary(): Promise<void> {
+    const brain = await this.open()
+    await brain.clearConcepts()
+  }
+
+  async lessonTitles(courseCode: string): Promise<string[]> {
+    const brain = await this.open()
+    return brain.courseLessonTitles(courseCode)
   }
 }
 

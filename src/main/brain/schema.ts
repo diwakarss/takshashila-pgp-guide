@@ -51,6 +51,29 @@ CREATE TABLE IF NOT EXISTS edges (
 CREATE INDEX IF NOT EXISTS chunks_source_idx ON chunks (source);
 CREATE INDEX IF NOT EXISTS pages_source_idx  ON pages (source);
 
+-- Conversations: persistent threads of tutoring turns (private, never uploaded).
+-- 'tab' lets the same model back Research threads later. answer is a JSON blob
+-- ({kind:'slides'|'text', slides?|text?, sources, followups}) so a thread
+-- re-renders on reload without re-asking the model.
+CREATE TABLE IF NOT EXISTS threads (
+  id          TEXT PRIMARY KEY,
+  tab         TEXT NOT NULL,
+  course_code TEXT,
+  title       TEXT NOT NULL,
+  created_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at  TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE TABLE IF NOT EXISTS turns (
+  id         TEXT PRIMARY KEY,
+  thread_id  TEXT NOT NULL REFERENCES threads(id) ON DELETE CASCADE,
+  ordinal    INT  NOT NULL,
+  question   TEXT NOT NULL,
+  answer     JSONB NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS turns_thread_idx  ON turns (thread_id, ordinal);
+CREATE INDEX IF NOT EXISTS threads_tab_idx   ON threads (tab, updated_at DESC);
+
 -- Illustration library: one row per drawn concept. Matched by embedding so a
 -- concept is drawn ONCE and reused across questions/phrasings (no per-answer
 -- regeneration). Ships with the corpus so students get illustrations for free.

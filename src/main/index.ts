@@ -2,10 +2,45 @@ import { app, shell, BrowserWindow, ipcMain } from 'electron'
 import { join } from 'path'
 import { IPC, type AppInfo } from '../shared/ipc'
 import { studyBrain } from './services/studyBrain'
-import { runTutor } from './services/tutor'
 import { agentCliEngine } from './engine/agentCli'
 import { imageEngine } from './illustrate/imageEngine'
-import type { IllustrationImage, IllustrationSpec } from '../shared/ipc'
+import { extractConcepts } from './illustrate/extract'
+import type { AskRequest, IllustrationImage, IllustrationSpec } from '../shared/ipc'
+
+// Builder batch: pre-generate the illustration library for the real courses.
+// PGP_DEV_BUILD_LIBRARY=1 (PGP_DEV_CLEAR_LIBRARY=1 to wipe first after a style
+// change; PGP_DEV_LIB_MAX=N concepts/course). Reuses resolveIllustration, so it
+// dedupes and only draws what's new.
+async function buildLibrary(): Promise<void> {
+  if (process.env['PGP_DEV_CLEAR_LIBRARY']) {
+    await studyBrain.clearLibrary()
+    console.log('[lib] cleared existing library')
+  }
+  const max = Number(process.env['PGP_DEV_LIB_MAX'] ?? '12')
+  const courses = (await studyBrain.courses()).filter((c) => c.code !== 'GENERAL')
+  let total = 0
+  let generated = 0
+  let failed = 0
+  for (const course of courses) {
+    const titles = await studyBrain.lessonTitles(course.code)
+    console.log(`[lib] ${course.code} ${course.name}: ${titles.length} lessons → extracting concepts…`)
+    const concepts = await extractConcepts(course.name, titles, agentCliEngine, max)
+    console.log(`[lib] ${course.code}: ${concepts.length} concepts to draw`)
+    for (const c of concepts) {
+      const before = await studyBrain.conceptCount()
+      const res = await studyBrain.resolveIllustration(c, course.code)
+      const after = await studyBrain.conceptCount()
+      total++
+      if (res.dataUrl && after > before) generated++
+      else if (!res.dataUrl) failed++
+      const tag = res.dataUrl ? (after > before ? 'NEW ' : 'reuse') : 'FAIL'
+      console.log(`[lib]  ${tag}  ${c.title}${res.error ? ' — ' + res.error : ''}`)
+    }
+  }
+  console.log(
+    `[lib] DONE: ${total} concepts, ${generated} generated, ${failed} failed. est cost ~$${(generated * 0.06).toFixed(2)}`
+  )
+}
 
 // ┌─────────────────────────────────────────────────────────────────────┐
 // │ Main process. Owns the native window + privileged work (brain, fs,   │
@@ -92,12 +127,10 @@ function registerIpc(): void {
 
   ipcMain.handle(IPC.corpusCourses, () => studyBrain.courses())
 
-  ipcMain.handle(IPC.tutorAsk, (_e, req: { question: string; courseCode?: string }) =>
-    runTutor(req, {
-      search: (q, limit, courseCode) => studyBrain.search(q, limit, courseCode),
-      engine: agentCliEngine
-    })
-  )
+  ipcMain.handle(IPC.tutorAsk, (_e, req: AskRequest) => studyBrain.ask(req))
+  ipcMain.handle(IPC.threadsList, (_e, tab?: string) => studyBrain.listThreads(tab))
+  ipcMain.handle(IPC.threadGet, (_e, id: string) => studyBrain.getThread(id))
+  ipcMain.handle(IPC.threadDelete, (_e, id: string) => studyBrain.deleteThread(id))
 
   ipcMain.handle(IPC.illustrationAvailable, () => imageEngine.isAvailable())
 
@@ -116,6 +149,10 @@ app.whenReady().then(() => {
   registerIpc()
   createWindow()
 
+  if (process.env['PGP_DEV_BUILD_LIBRARY']) {
+    void buildLibrary().catch((e) => console.error('[lib] build failed:', e))
+  }
+
   // Dev diagnostic: PGP_DEV_AUTOIMPORT=<n> runs a small import on startup and
   // logs the outcome, so an import crash is reproducible headlessly.
   const autoimport = Number(process.env['PGP_DEV_AUTOIMPORT'] ?? '0')
@@ -130,19 +167,17 @@ app.whenReady().then(() => {
         console.log('[pgp] dev auto-import OK:', JSON.stringify(r))
         console.log('[pgp] dev courses:', JSON.stringify(await studyBrain.courses()))
         if (process.env['PGP_DEV_AUTOASK']) {
-          const ans = await runTutor(
-            { question: process.env['PGP_DEV_AUTOASK'] },
-            {
-              search: (q, limit, courseCode) => studyBrain.search(q, limit, courseCode),
-              engine: agentCliEngine
-            }
-          )
+          const { turn } = await studyBrain.ask({ question: process.env['PGP_DEV_AUTOASK'] })
+          const ans = turn.answer
           console.log(
-            '[pgp] dev slides:',
-            JSON.stringify(ans.slides.map((s) => ({ h: s.heading, ill: s.illustration?.title ?? null })))
+            `[pgp] dev reply kind=${ans.kind}:`,
+            ans.kind === 'slides'
+              ? JSON.stringify(ans.slides.map((s) => ({ h: s.heading, ill: s.illustration?.title ?? null })))
+              : ans.text.slice(0, 160)
           )
+          console.log('[pgp] dev followups:', JSON.stringify(ans.followups))
           console.log('[pgp] dev sources:', ans.sources.map((s) => s.title ?? s.slug).join(' | '))
-          if (process.env['PGP_DEV_ILLUS'] && imageEngine.isAvailable()) {
+          if (process.env['PGP_DEV_ILLUS'] && imageEngine.isAvailable() && ans.kind === 'slides') {
             for (const slide of ans.slides) {
               if (!slide.illustration) continue
               const res = await studyBrain.resolveIllustration(slide.illustration)

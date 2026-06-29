@@ -27,8 +27,14 @@ export const IPC = {
   corpusCourses: 'corpus:courses',
   /** Which engine is connected and whether it's usable right now. */
   engineStatus: 'engine:status',
-  /** Ask the tutor: retrieve + grounded, slide-based pedagogical answer. */
+  /** Ask the tutor in a thread (new if no threadId); returns the appended turn. */
   tutorAsk: 'tutor:ask',
+  /** List saved conversation threads for a tab (Recents). */
+  threadsList: 'threads:list',
+  /** Load a full thread with its turns. */
+  threadGet: 'thread:get',
+  /** Delete a thread. */
+  threadDelete: 'thread:delete',
   /** Is on-demand illustration generation available on this machine? */
   illustrationAvailable: 'illustration:available',
   /** Generate (or return cached) one illustration; resolves to a data URL or an error reason. */
@@ -80,7 +86,7 @@ export type SearchHit = {
 
 export type CourseSummary = { code: string; name: string; lessons: number }
 
-export type AskRequest = { question: string; courseCode?: string }
+export type AskRequest = { question: string; courseCode?: string; threadId?: string }
 
 export type EngineStatus = {
   id: string
@@ -97,11 +103,32 @@ export type Slide = {
   illustration: IllustrationSpec | null
 }
 
-export type TutorAnswer = {
-  slides: Slide[]
+// A tutor reply is EITHER a slide deck (concept explanation) or plain markdown
+// text (a simple question). Both carry corpus citations + follow-up suggestions.
+export type TutorReply = {
+  kind: 'slides' | 'text'
+  slides: Slide[] // populated when kind === 'slides'
+  text: string // populated when kind === 'text'
   sources: SearchHit[]
+  followups: string[]
   engineId: string
 }
+
+export type Turn = { id: string; question: string; answer: TutorReply; createdAt: string }
+
+export type Thread = {
+  id: string
+  tab: string // 'tutor' (reusable for 'research' later)
+  courseCode: string | null
+  title: string
+  createdAt: string
+  updatedAt: string
+}
+
+export type ThreadDetail = Thread & { turns: Turn[] }
+
+/** Asking returns the (possibly new) thread id and the appended turn. */
+export type AskResult = { threadId: string; turn: Turn }
 
 /** Either a generated image (dataUrl) or a reason it couldn't be made. */
 export type IllustrationImage = {

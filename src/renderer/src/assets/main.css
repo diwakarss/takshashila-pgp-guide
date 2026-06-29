@@ -333,6 +333,34 @@ h2 {
   outline: 2px solid color-mix(in srgb, var(--tutor) 50%, transparent);
   outline-offset: 1px;
 }
+/* ── tutor conversation ─────────────────────────────────── */
+.tutor-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 16px;
+}
+.tutor-head-controls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.tutor-head-controls .btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.followups {
+  margin-top: 16px;
+}
+.ask-dock {
+  margin-top: 20px;
+  position: sticky;
+  bottom: 0;
+  background: var(--parchment);
+  padding: 10px 0;
+}
+
 /* ── slide viewer ───────────────────────────────────────── */
 .slide {
   background: var(--surface);

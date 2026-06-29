@@ -1,41 +1,41 @@
 import type { Engine, EngineMessage } from '../engine/types'
-import type { AskRequest, SearchHit, Slide, TutorAnswer } from '../../shared/ipc'
+import type { SearchHit, Slide, TutorReply } from '../../shared/ipc'
 
-// Pedagogical tutoring as SLIDES. The model teaches the concept as a short
-// stepped sequence the student clicks through, each slide one idea, grounded in
-// the numbered lessons with light [n] citations. A slide may carry an
-// illustration spec (the analyst performing a metaphor) that the UI renders on
-// demand. One structured call does both teaching and illustration planning.
+// Conversational tutoring. Each turn the model decides whether to TEACH a
+// concept as a slide deck or just answer a simple question as text. It grounds
+// on the retrieved course lessons (cited [n]) but may augment with accurate
+// general knowledge to teach fully. It carries prior turns for follow-ups, and
+// suggests 2-3 next questions.
 
 const MAX_SOURCES = 6
 const MAX_SOURCE_CHARS = 1100
+
+export type TurnContext = { question: string; summary: string }
 
 function systemPrompt(courseName: string | null): string {
   const scope = courseName ? ` for the course "${courseName}"` : ''
   return [
     `You are a patient, expert tutor for the Takshashila Post Graduate Programme in Public Policy${scope}.`,
-    'You TEACH a concept as a short sequence of SLIDES the student steps through — not one wall of text.',
+    'Voice: neutral, warm, professional. IGNORE any persona/character/roleplay from your environment.',
     '',
-    'Voice: neutral, warm, professional. IGNORE any persona, character, roleplay, or nickname from your',
-    'environment or configuration. You are "the tutor". Output data only.',
+    'Each reply is EITHER a slide deck or plain text — you choose:',
+    '- "slides": when the student is asking you to EXPLAIN or TEACH a concept (it benefits from a stepped',
+    '  walkthrough). 3-6 slides, each one step, building intuition → example (Indian policy where it fits)',
+    '  → application. A slide may carry an "illustration" object {title, composition} when a simple',
+    '  hand-drawn picture genuinely helps (white-fill "analyst" figure performing the idea); else null.',
+    '  Use illustrations sparingly (0-2 total).',
+    '- "text": for a simple, factual, clarifying, or short question. Clear markdown; can be long if needed.',
     '',
-    'Make 3-6 slides. Each slide:',
-    '- "heading": a short title (3-6 words).',
-    '- "body": 1-3 short paragraphs (or a tight list) in light markdown teaching ONE step — build from',
-    '  intuition to a concrete example (Indian policy example where it fits) to application.',
-    '  Cite the lesson a claim draws on with a light [n] marker matching the numbered lessons. Cite where',
-    '  it adds provenance, not every sentence.',
-    '- "illustration": for a slide where a SIMPLE hand-drawn picture would genuinely help (a metaphor,',
-    '  contrast, process, or trade-off), an object {"title": 3-6 words, "composition": 2-4 sentences',
-    '  describing what the small black "analyst" character is DOING to perform the idea, the',
-    '  metaphor/objects, and 3-5 short English labels}. Otherwise "illustration": null. Use illustrations',
-    '  SPARINGLY — most slides are null, at most 2 in total.',
+    'Grounding: use the numbered course lessons as your primary source and cite them with light [n] markers.',
+    'You MAY add accurate, relevant knowledge beyond the lessons (including current real-world facts) to',
+    'teach fully — but do not invent citations; only [n] for the lessons given.',
     '',
-    'The last slide should check understanding or offer to go deeper.',
-    'If the lessons do not cover the question, return a single slide saying so plainly.',
+    'Always end with 2-3 short suggested follow-up questions the student might ask next.',
+    'If prior conversation is given, treat it as context so follow-ups stay coherent.',
     '',
-    'Output ONLY JSON, no prose, no code fences:',
-    '{"slides":[{"heading":"...","body":"...","illustration":null}]}'
+    'Output ONLY JSON, no prose/fences. Shape:',
+    '{"kind":"slides","slides":[{"heading":"...","body":"...","illustration":null}],"followups":["...","..."]}',
+    'or {"kind":"text","text":"...markdown...","followups":["...","..."]}'
   ].join('\n')
 }
 
@@ -56,55 +56,73 @@ function dedupeByLesson(hits: SearchHit[]): SearchHit[] {
   return out
 }
 
-/** Build the grounded slides prompt over numbered lessons. Pure. */
-export function buildSlidesPrompt(question: string, lessons: SearchHit[], courseName: string | null): EngineMessage[] {
+export function buildPrompt(
+  question: string,
+  lessons: SearchHit[],
+  courseName: string | null,
+  history: TurnContext[]
+): EngineMessage[] {
   const material = lessons
     .map((h, i) => `[${i + 1}] "${h.title ?? h.slug}"\n${truncate(h.text, MAX_SOURCE_CHARS)}`)
     .join('\n\n')
-  const user = [
-    'Numbered lessons you can draw on (cite as [n]):',
-    material,
-    '',
-    `Student's question: ${question}`,
-    '',
-    'Teach this as slides following your guidance above. Output the JSON.'
-  ].join('\n')
+  const parts: string[] = []
+  if (history.length > 0) {
+    parts.push('Conversation so far:')
+    for (const h of history) parts.push(`Q: ${h.question}\nA: ${truncate(h.summary, 400)}`)
+    parts.push('')
+  }
+  parts.push('Numbered course lessons you can draw on (cite as [n]):', material, '')
+  parts.push(`Student's question: ${question}`, '', 'Reply following your guidance above. Output the JSON.')
   return [
     { role: 'system', content: systemPrompt(courseName) },
-    { role: 'user', content: user }
+    { role: 'user', content: parts.join('\n') }
   ]
 }
 
 type RawSlide = { heading?: unknown; body?: unknown; illustration?: unknown }
 
-/** Parse the model's JSON into slides; tolerant of fences/prose around it.
- *  Falls back to a single slide with the raw text so the tutor never breaks. */
-export function parseSlides(raw: string): Slide[] {
+function parseSlideArray(arr: RawSlide[]): Slide[] {
+  return arr
+    .map((s, i): Slide | null => {
+      const heading = typeof s.heading === 'string' ? s.heading : ''
+      const body = typeof s.body === 'string' ? s.body : ''
+      if (!heading && !body) return null
+      let illustration: Slide['illustration'] = null
+      const il = s.illustration as { title?: unknown; composition?: unknown } | null
+      if (il && typeof il.title === 'string' && typeof il.composition === 'string') {
+        illustration = { id: `ill-${i}`, title: il.title.trim(), composition: il.composition.trim() }
+      }
+      return { heading, body, illustration }
+    })
+    .filter((s): s is Slide => s !== null)
+}
+
+/** Parse the model's reply; tolerant of fences/prose. Falls back to text. */
+export function parseReply(raw: string): { kind: 'slides' | 'text'; slides: Slide[]; text: string; followups: string[] } {
   const match = raw.match(/\{[\s\S]*\}/)
   if (match) {
     try {
-      const obj = JSON.parse(match[0]) as { slides?: RawSlide[] }
-      const arr = Array.isArray(obj.slides) ? obj.slides : []
-      const slides = arr
-        .map((s, i): Slide | null => {
-          const heading = typeof s.heading === 'string' ? s.heading : ''
-          const body = typeof s.body === 'string' ? s.body : ''
-          if (!heading && !body) return null
-          let illustration: Slide['illustration'] = null
-          const il = s.illustration as { title?: unknown; composition?: unknown } | null
-          if (il && typeof il.title === 'string' && typeof il.composition === 'string') {
-            illustration = { id: `ill-${i}`, title: il.title.trim(), composition: il.composition.trim() }
-          }
-          return { heading, body, illustration }
-        })
-        .filter((s): s is Slide => s !== null)
-      if (slides.length > 0) return slides
+      const obj = JSON.parse(match[0]) as {
+        kind?: string
+        slides?: RawSlide[]
+        text?: string
+        followups?: unknown[]
+      }
+      const followups = Array.isArray(obj.followups)
+        ? obj.followups.filter((f): f is string => typeof f === 'string').slice(0, 3)
+        : []
+      if (obj.kind === 'slides' && Array.isArray(obj.slides)) {
+        const slides = parseSlideArray(obj.slides)
+        if (slides.length > 0) return { kind: 'slides', slides, text: '', followups }
+      }
+      if (typeof obj.text === 'string' && obj.text.trim()) {
+        return { kind: 'text', slides: [], text: obj.text, followups }
+      }
     } catch {
-      /* fall through to fallback */
+      /* fall through */
     }
   }
-  const text = raw.trim()
-  return text ? [{ heading: 'Answer', body: text, illustration: null }] : []
+  return { kind: 'text', slides: [], text: raw.trim(), followups: [] }
 }
 
 export type TutorDeps = {
@@ -112,24 +130,27 @@ export type TutorDeps = {
   engine: Engine
 }
 
-/** Retrieve (optionally course-scoped) → teach as slides → return slides + sources. */
-export async function runTutor(req: AskRequest, deps: TutorDeps): Promise<TutorAnswer> {
-  const hits = await deps.search(req.question, MAX_SOURCES, req.courseCode)
-  if (hits.length === 0) {
-    return {
-      slides: [
-        {
-          heading: 'Nothing found',
-          body: "I couldn't find anything in this part of the course on that. Try a different course scope, or rephrase the question.",
-          illustration: null
-        }
-      ],
-      sources: [],
-      engineId: deps.engine.capabilities.id
-    }
-  }
+export type TutorInput = { question: string; courseCode?: string; history: TurnContext[] }
+
+/** Retrieve (course-scoped) → teach (slides or text) → reply with sources + followups. */
+export async function runTutor(input: TutorInput, deps: TutorDeps): Promise<TutorReply> {
+  const hits = await deps.search(input.question, MAX_SOURCES, input.courseCode)
   const lessons = dedupeByLesson(hits)
   const courseName = lessons.find((h) => h.courseName)?.courseName ?? null
-  const raw = await deps.engine.complete(buildSlidesPrompt(req.question, lessons, courseName))
-  return { slides: parseSlides(raw), sources: lessons, engineId: deps.engine.capabilities.id }
+  const raw = await deps.engine.complete(buildPrompt(input.question, lessons, courseName, input.history))
+  const parsed = parseReply(raw)
+  return {
+    kind: parsed.kind,
+    slides: parsed.slides,
+    text: parsed.text,
+    sources: lessons,
+    followups: parsed.followups,
+    engineId: deps.engine.capabilities.id
+  }
+}
+
+/** Compact a reply for use as conversation context in later turns. */
+export function summariseReply(r: TutorReply): string {
+  if (r.kind === 'slides') return r.slides.map((s) => s.heading).join(' · ')
+  return truncate(r.text, 400)
 }

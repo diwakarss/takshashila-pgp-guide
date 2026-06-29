@@ -1,6 +1,7 @@
 import { PGlite } from '@electric-sql/pglite'
 import { vector } from '@electric-sql/pglite/vector'
 import { SCHEMA_SQL, EMBED_DIM } from './schema'
+import type { Thread, ThreadDetail, Turn, TutorReply } from '../../shared/ipc'
 
 export type Source = 'corpus' | 'private'
 
@@ -194,6 +195,107 @@ export class Brain {
   async conceptCount(): Promise<number> {
     const r = await this.db.query<{ count: number }>(`SELECT count(*)::int AS count FROM concepts`)
     return r.rows[0]?.count ?? 0
+  }
+
+  /** Wipe the concept library (e.g. after a style change, to force regen). */
+  async clearConcepts(): Promise<void> {
+    await this.db.query(`DELETE FROM concepts`)
+  }
+
+  /** Distinct lesson titles for a course — input to concept extraction. */
+  async courseLessonTitles(courseCode: string): Promise<string[]> {
+    const r = await this.db.query<{ title: string }>(
+      `SELECT DISTINCT title FROM pages
+        WHERE source = 'corpus' AND course_code = $1 AND title IS NOT NULL
+        ORDER BY title`,
+      [courseCode]
+    )
+    return r.rows.map((x) => x.title)
+  }
+
+  // ── conversation threads (private; never uploaded) ──────────────────────
+
+  async createThread(t: { id: string; tab: string; courseCode: string | null; title: string }): Promise<void> {
+    await this.db.query(
+      `INSERT INTO threads (id, tab, course_code, title) VALUES ($1, $2, $3, $4)`,
+      [t.id, t.tab, t.courseCode, t.title]
+    )
+  }
+
+  async listThreads(tab: string): Promise<Thread[]> {
+    const r = await this.db.query<{
+      id: string
+      tab: string
+      course_code: string | null
+      title: string
+      created_at: string
+      updated_at: string
+    }>(`SELECT * FROM threads WHERE tab = $1 ORDER BY updated_at DESC`, [tab])
+    return r.rows.map((t) => ({
+      id: t.id,
+      tab: t.tab,
+      courseCode: t.course_code,
+      title: t.title,
+      createdAt: String(t.created_at),
+      updatedAt: String(t.updated_at)
+    }))
+  }
+
+  private async turnsOf(threadId: string): Promise<Turn[]> {
+    const r = await this.db.query<{ id: string; question: string; answer: TutorReply; created_at: string }>(
+      `SELECT id, question, answer, created_at FROM turns WHERE thread_id = $1 ORDER BY ordinal`,
+      [threadId]
+    )
+    return r.rows.map((t) => ({
+      id: t.id,
+      question: t.question,
+      answer: typeof t.answer === 'string' ? (JSON.parse(t.answer) as TutorReply) : t.answer,
+      createdAt: String(t.created_at)
+    }))
+  }
+
+  async getThread(id: string): Promise<ThreadDetail | null> {
+    const r = await this.db.query<{
+      id: string
+      tab: string
+      course_code: string | null
+      title: string
+      created_at: string
+      updated_at: string
+    }>(`SELECT * FROM threads WHERE id = $1`, [id])
+    const t = r.rows[0]
+    if (!t) return null
+    return {
+      id: t.id,
+      tab: t.tab,
+      courseCode: t.course_code,
+      title: t.title,
+      createdAt: String(t.created_at),
+      updatedAt: String(t.updated_at),
+      turns: await this.turnsOf(id)
+    }
+  }
+
+  /** Append a turn and bump the thread's updated_at, atomically. */
+  async appendTurn(threadId: string, turn: { id: string; question: string; answer: TutorReply }): Promise<Turn> {
+    return this.db.transaction(async (tx) => {
+      const ord = await tx.query<{ next: number }>(
+        `SELECT COALESCE(max(ordinal), -1) + 1 AS next FROM turns WHERE thread_id = $1`,
+        [threadId]
+      )
+      const ordinal = ord.rows[0]?.next ?? 0
+      const res = await tx.query<{ created_at: string }>(
+        `INSERT INTO turns (id, thread_id, ordinal, question, answer)
+         VALUES ($1, $2, $3, $4, $5) RETURNING created_at`,
+        [turn.id, threadId, ordinal, turn.question, JSON.stringify(turn.answer)]
+      )
+      await tx.query(`UPDATE threads SET updated_at = now() WHERE id = $1`, [threadId])
+      return { id: turn.id, question: turn.question, answer: turn.answer, createdAt: String(res.rows[0]?.created_at) }
+    })
+  }
+
+  async deleteThread(id: string): Promise<void> {
+    await this.db.query(`DELETE FROM threads WHERE id = $1`, [id])
   }
 
   /** List the courses present in the corpus, with lesson counts. */

@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest'
-import { buildSlidesPrompt, parseSlides, runTutor } from './tutor'
+import { buildPrompt, parseReply, runTutor, summariseReply } from './tutor'
 import type { Engine } from '../engine/types'
-import type { SearchHit } from '../../shared/ipc'
+import type { SearchHit, TutorReply } from '../../shared/ipc'
 
 function hit(slug: string, text: string, title: string, courseName = 'Microeconomics-I', score = 0.8): SearchHit {
   return { id: `${slug}#0`, slug, source: 'corpus', ordinal: 0, text, title, type: 'study-notes', courseName, score }
@@ -22,63 +22,69 @@ const fakeEngine = (reply: string): Engine => ({
   complete: async () => reply
 })
 
-describe('buildSlidesPrompt', () => {
-  it('asks for JSON slides, numbered lessons, light [n] citations, names course', () => {
-    const msgs = buildSlidesPrompt('why do bans fail?', [hit('m1', 'incentives', 'Micro 1')], 'Microeconomics-I')
-    expect(msgs[0].content).toMatch(/SLIDES/)
-    expect(msgs[0].content).toMatch(/Output ONLY JSON/)
+describe('buildPrompt', () => {
+  it('includes lessons, course, and prior conversation context', () => {
+    const msgs = buildPrompt(
+      'go deeper',
+      [hit('m1', 'incentives', 'Micro 1')],
+      'Microeconomics-I',
+      [{ question: 'why do bans fail?', summary: 'people respond to incentives' }]
+    )
+    expect(msgs[0].content).toMatch(/slide deck or plain text/)
     expect(msgs[0].content).toContain('Microeconomics-I')
+    expect(msgs[1].content).toContain('Conversation so far')
+    expect(msgs[1].content).toContain('why do bans fail?')
     expect(msgs[1].content).toContain('[1] "Micro 1"')
   })
 })
 
-describe('parseSlides', () => {
-  it('parses a clean slides object', () => {
-    const slides = parseSlides('{"slides":[{"heading":"A","body":"text [1]","illustration":null}]}')
-    expect(slides).toHaveLength(1)
-    expect(slides[0].heading).toBe('A')
-    expect(slides[0].illustration).toBeNull()
+describe('parseReply', () => {
+  it('parses a slides reply with followups', () => {
+    const r = parseReply('{"kind":"slides","slides":[{"heading":"A","body":"b [1]","illustration":null}],"followups":["next?"]}')
+    expect(r.kind).toBe('slides')
+    expect(r.slides).toHaveLength(1)
+    expect(r.followups).toEqual(['next?'])
   })
 
-  it('extracts JSON wrapped in prose / code fences and reads illustration specs', () => {
-    const raw =
-      'Here you go:\n```json\n{"slides":[{"heading":"H","body":"b","illustration":{"title":"T","composition":"C"}}]}\n```'
-    const slides = parseSlides(raw)
-    expect(slides[0].illustration).toEqual({ id: 'ill-0', title: 'T', composition: 'C' })
+  it('parses a text reply', () => {
+    const r = parseReply('{"kind":"text","text":"The exam is in week 12.","followups":[]}')
+    expect(r.kind).toBe('text')
+    expect(r.text).toContain('week 12')
+    expect(r.slides).toHaveLength(0)
   })
 
-  it('falls back to a single slide when there is no JSON', () => {
-    const slides = parseSlides('just prose, no json here')
-    expect(slides).toHaveLength(1)
-    expect(slides[0].body).toContain('just prose')
+  it('falls back to text when there is no JSON', () => {
+    const r = parseReply('just prose')
+    expect(r.kind).toBe('text')
+    expect(r.text).toBe('just prose')
   })
 })
 
 describe('runTutor', () => {
-  it('scopes search and returns parsed slides + sources', async () => {
+  it('scopes search, returns a typed reply with sources + followups', async () => {
     let scoped: string | undefined = 'unset'
-    const result = await runTutor(
-      { question: 'why do bans fail?', courseCode: 'PP231' },
+    const reply = await runTutor(
+      { question: 'explain elasticity', courseCode: 'PP231', history: [] },
       {
-        search: async (_q, _l, courseCode) => {
-          scoped = courseCode
-          return [hit('m1', 'incentives', 'Micro 1')]
+        search: async (_q, _l, c) => {
+          scoped = c
+          return [hit('m1', 'elastic', 'Micro 1')]
         },
-        engine: fakeEngine('{"slides":[{"heading":"Bans","body":"people respond to incentives [1]","illustration":null}]}')
+        engine: fakeEngine('{"kind":"slides","slides":[{"heading":"Elasticity","body":"x [1]","illustration":null}],"followups":["a","b"]}')
       }
     )
     expect(scoped).toBe('PP231')
-    expect(result.slides[0].heading).toBe('Bans')
-    expect(result.sources).toHaveLength(1)
+    expect(reply.kind).toBe('slides')
+    expect(reply.sources).toHaveLength(1)
+    expect(reply.followups).toEqual(['a', 'b'])
   })
+})
 
-  it('returns a "Nothing found" slide and skips the engine when no lessons match', async () => {
-    let called = false
-    const result = await runTutor(
-      { question: 'obscure' },
-      { search: async () => [], engine: { ...fakeEngine('x'), complete: async () => ((called = true), '') } }
-    )
-    expect(called).toBe(false)
-    expect(result.slides[0].heading).toMatch(/Nothing found/i)
+describe('summariseReply', () => {
+  it('summarises slides by heading and text by snippet', () => {
+    const slides: TutorReply = { kind: 'slides', slides: [{ heading: 'One', body: '', illustration: null }, { heading: 'Two', body: '', illustration: null }], text: '', sources: [], followups: [], engineId: 'x' }
+    expect(summariseReply(slides)).toBe('One · Two')
+    const text: TutorReply = { kind: 'text', slides: [], text: 'a short answer', sources: [], followups: [], engineId: 'x' }
+    expect(summariseReply(text)).toBe('a short answer')
   })
 })

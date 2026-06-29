@@ -3,6 +3,7 @@ import {
   IPC,
   type AppInfo,
   type AskRequest,
+  type AskResult,
   type BrainStats,
   type CorpusStatus,
   type CourseSummary,
@@ -12,7 +13,8 @@ import {
   type ImportProgress,
   type ImportResult,
   type SearchHit,
-  type TutorAnswer
+  type Thread,
+  type ThreadDetail
 } from '../shared/ipc'
 
 // The ONLY surface the renderer can see. contextIsolation keeps this behind a
@@ -28,7 +30,10 @@ const api = {
   search: (query: string): Promise<SearchHit[]> => ipcRenderer.invoke(IPC.brainSearch, query),
   courses: (): Promise<CourseSummary[]> => ipcRenderer.invoke(IPC.corpusCourses),
   engineStatus: (): Promise<EngineStatus> => ipcRenderer.invoke(IPC.engineStatus),
-  askTutor: (req: AskRequest): Promise<TutorAnswer> => ipcRenderer.invoke(IPC.tutorAsk, req),
+  askTutor: (req: AskRequest): Promise<AskResult> => ipcRenderer.invoke(IPC.tutorAsk, req),
+  listThreads: (tab = 'tutor'): Promise<Thread[]> => ipcRenderer.invoke(IPC.threadsList, tab),
+  getThread: (id: string): Promise<ThreadDetail | null> => ipcRenderer.invoke(IPC.threadGet, id),
+  deleteThread: (id: string): Promise<void> => ipcRenderer.invoke(IPC.threadDelete, id),
   illustrationAvailable: (): Promise<boolean> => ipcRenderer.invoke(IPC.illustrationAvailable),
   generateIllustration: (spec: IllustrationSpec, courseCode?: string): Promise<IllustrationImage> =>
     ipcRenderer.invoke(IPC.illustrationGenerate, { spec, courseCode }),
