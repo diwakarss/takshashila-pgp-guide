@@ -2,8 +2,10 @@ import { contextBridge, ipcRenderer, type IpcRendererEvent } from 'electron'
 import {
   IPC,
   type AppInfo,
+  type AskRequest,
   type BrainStats,
   type CorpusStatus,
+  type CourseSummary,
   type EngineStatus,
   type ImportProgress,
   type ImportResult,
@@ -22,8 +24,9 @@ const api = {
   brainStats: (): Promise<BrainStats> => ipcRenderer.invoke(IPC.brainStats),
   importCorpus: (): Promise<ImportResult> => ipcRenderer.invoke(IPC.corpusImport),
   search: (query: string): Promise<SearchHit[]> => ipcRenderer.invoke(IPC.brainSearch, query),
+  courses: (): Promise<CourseSummary[]> => ipcRenderer.invoke(IPC.corpusCourses),
   engineStatus: (): Promise<EngineStatus> => ipcRenderer.invoke(IPC.engineStatus),
-  askTutor: (question: string): Promise<TutorAnswer> => ipcRenderer.invoke(IPC.tutorAsk, question),
+  askTutor: (req: AskRequest): Promise<TutorAnswer> => ipcRenderer.invoke(IPC.tutorAsk, req),
 
   /** Subscribe to import progress. Returns an unsubscribe fn. */
   onImportProgress: (cb: (p: ImportProgress) => void): (() => void) => {

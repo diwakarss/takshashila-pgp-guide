@@ -304,9 +304,80 @@ h2 {
   transition: width 120ms ease;
 }
 
+/* ── course picker ──────────────────────────────────────── */
+.course-picker {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin: 0 0 14px;
+}
+.course-tab {
+  font: inherit;
+  font-size: 13px;
+  padding: 6px 12px;
+  border-radius: 999px;
+  border: 1px solid var(--hairline);
+  background: var(--surface);
+  color: var(--muted);
+  cursor: pointer;
+}
+.course-tab:hover {
+  border-color: var(--tutor);
+}
+.course-tab.active {
+  color: var(--ink);
+  border-color: var(--tutor);
+  background: color-mix(in srgb, var(--tutor) 8%, transparent);
+}
+.course-code {
+  font-weight: 500;
+  color: var(--tutor);
+}
+
 /* ── tutor answer + sources ─────────────────────────────── */
 .answer {
   margin-top: 18px;
+}
+.answer-md {
+  font-family: 'Source Serif Pro', Georgia, serif;
+  font-size: 16px;
+  line-height: 1.7;
+}
+.answer-md p {
+  margin: 0 0 12px;
+}
+.answer-md ul,
+.answer-md ol {
+  margin: 0 0 12px;
+  padding-left: 22px;
+}
+.answer-md li {
+  margin: 4px 0;
+}
+.answer-md strong {
+  font-weight: 600;
+}
+.answer-md h3 {
+  font-size: 16px;
+  margin: 14px 0 6px;
+}
+.source-list {
+  list-style: none;
+  margin: 8px 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.source-line {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 10px;
+  font-size: 14px;
+}
+.source-line-title {
+  color: var(--ink);
 }
 .answer-text {
   font-family: 'Source Serif Pro', Georgia, serif;

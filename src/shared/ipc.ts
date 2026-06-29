@@ -23,9 +23,11 @@ export const IPC = {
   corpusImportProgress: 'corpus:import:progress',
   /** Semantic search over the brain; returns cited chunks. */
   brainSearch: 'brain:search',
+  /** Courses present in the corpus, with lesson counts. */
+  corpusCourses: 'corpus:courses',
   /** Which engine is connected and whether it's usable right now. */
   engineStatus: 'engine:status',
-  /** Ask the tutor: retrieve + grounded, cited answer. */
+  /** Ask the tutor: retrieve + grounded, pedagogical answer. */
   tutorAsk: 'tutor:ask'
 } as const
 
@@ -68,8 +70,13 @@ export type SearchHit = {
   text: string
   title: string | null
   type: string | null
+  courseName: string | null
   score: number
 }
+
+export type CourseSummary = { code: string; name: string; lessons: number }
+
+export type AskRequest = { question: string; courseCode?: string }
 
 export type EngineStatus = {
   id: string

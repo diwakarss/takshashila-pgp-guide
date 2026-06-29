@@ -88,9 +88,11 @@ function registerIpc(): void {
     }
   })
 
-  ipcMain.handle(IPC.tutorAsk, (_e, question: string) =>
-    runTutor(question, {
-      search: (q, limit) => studyBrain.search(q, limit),
+  ipcMain.handle(IPC.corpusCourses, () => studyBrain.courses())
+
+  ipcMain.handle(IPC.tutorAsk, (_e, req: { question: string; courseCode?: string }) =>
+    runTutor(req, {
+      search: (q, limit, courseCode) => studyBrain.search(q, limit, courseCode),
       engine: agentCliEngine
     })
   )
@@ -116,11 +118,15 @@ app.whenReady().then(() => {
           autoimport
         )
         console.log('[pgp] dev auto-import OK:', JSON.stringify(r))
+        console.log('[pgp] dev courses:', JSON.stringify(await studyBrain.courses()))
         if (process.env['PGP_DEV_AUTOASK']) {
-          const ans = await runTutor(process.env['PGP_DEV_AUTOASK'], {
-            search: (q, limit) => studyBrain.search(q, limit),
-            engine: agentCliEngine
-          })
+          const ans = await runTutor(
+            { question: process.env['PGP_DEV_AUTOASK'] },
+            {
+              search: (q, limit, courseCode) => studyBrain.search(q, limit, courseCode),
+              engine: agentCliEngine
+            }
+          )
           console.log('[pgp] dev auto-ask answer:', ans.answer.slice(0, 400))
           console.log('[pgp] dev auto-ask sources:', ans.sources.map((s) => s.title ?? s.slug).join(' | '))
         }

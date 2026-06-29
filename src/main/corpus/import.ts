@@ -2,6 +2,7 @@ import { readdir, readFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { parsePage } from './parse'
 import { chunkBody } from './chunk'
+import { classifyCourse } from './course'
 import type { Embedder } from '../embed/types'
 import type { SourceWriter } from '../brain/brain'
 
@@ -51,11 +52,14 @@ export async function importDirectory(opts: {
         text: c.text,
         embedding: embeddings[idx]
       }))
+      const course = classifyCourse(page.slug, page.title)
       await writer.upsertPage(
         {
           slug: page.slug,
           type: page.type,
           title: page.title,
+          courseCode: course.code,
+          courseName: course.name,
           frontmatter: page.frontmatter,
           markdown: page.body,
           contentHash: page.contentHash,

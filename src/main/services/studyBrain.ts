@@ -4,7 +4,8 @@ import { existsSync, readdirSync } from 'node:fs'
 import { Brain } from '../brain/brain'
 import { nomicEmbedder } from '../embed/embedder'
 import { importDirectory, type ImportProgress, type ImportResult } from '../corpus/import'
-import type { BrainStats, CorpusStatus, SearchHit } from '../../shared/ipc'
+import { classifyCourse } from '../corpus/course'
+import type { BrainStats, CorpusStatus, CourseSummary, SearchHit } from '../../shared/ipc'
 
 // Owns the brain + embedder for the running app. The renderer reaches this
 // only through IPC handlers (registered in main/index.ts). The brain file
@@ -15,7 +16,11 @@ class StudyBrainService {
 
   private async open(): Promise<Brain> {
     if (!this.brain) {
-      this.brain = await Brain.open(join(app.getPath('userData'), 'brain'))
+      const brain = await Brain.open(join(app.getPath('userData'), 'brain'))
+      // Backfill course tags for brains imported before course support existed
+      // (cheap, no re-embedding). Idempotent.
+      await brain.retagCourses(classifyCourse)
+      this.brain = brain
       // Warm the embedder in the background so the first query/import isn't a
       // cold start (eng-review D10). Non-blocking.
       void nomicEmbedder.warmup()
@@ -65,10 +70,15 @@ class StudyBrainService {
     }
   }
 
-  async search(query: string, limit = 6): Promise<SearchHit[]> {
+  async courses(): Promise<CourseSummary[]> {
+    const brain = await this.open()
+    return brain.courses()
+  }
+
+  async search(query: string, limit = 6, courseCode?: string): Promise<SearchHit[]> {
     const brain = await this.open()
     const q = await nomicEmbedder.embedQuery(query)
-    return brain.search(q, { limit })
+    return brain.search(q, { limit, courseCode })
   }
 }
 

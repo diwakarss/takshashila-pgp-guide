@@ -1,19 +1,27 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { BookOpen, Bookmark } from 'lucide-react'
-import type { EngineStatus, TutorAnswer } from '../../../shared/ipc'
+import ReactMarkdown from 'react-markdown'
+import type { CourseSummary, EngineStatus, TutorAnswer } from '../../../shared/ipc'
 
-// Tutor — the default surface. Phase 1: cited Q&A over the whole corpus. The
-// course navigator (Course → LU → lesson) and capture land in Phase 2.
+// Tutor — the default surface. Pick a course to scope the question, ask, and
+// get a taught (not regurgitated) answer. The course navigator (LU → lesson)
+// and capture land in later phases.
 export function Tutor(props: {
   ready: boolean
   engine: EngineStatus | null
   onGoToSettings: () => void
 }): JSX.Element {
   const { ready, engine, onGoToSettings } = props
+  const [courses, setCourses] = useState<CourseSummary[]>([])
+  const [course, setCourse] = useState<string | undefined>(undefined) // undefined = all
   const [q, setQ] = useState('')
   const [result, setResult] = useState<TutorAnswer | null>(null)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
+
+  useEffect(() => {
+    if (ready) void window.pgp.courses().then(setCourses)
+  }, [ready])
 
   const engineReady = engine?.available ?? false
   const canAsk = ready && engineReady && !busy && q.trim().length > 0
@@ -23,7 +31,7 @@ export function Tutor(props: {
     setBusy(true)
     setError(null)
     try {
-      setResult(await window.pgp.askTutor(q.trim()))
+      setResult(await window.pgp.askTutor({ question: q.trim(), courseCode: course }))
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e))
     } finally {
@@ -33,39 +41,64 @@ export function Tutor(props: {
 
   if (!ready) {
     return (
-      <EmptyState
-        title="Set up your course library"
-        line="Import the cohort lessons once, then ask anything about the course and get cited answers."
-        actionLabel="Go to Settings"
-        onAction={onGoToSettings}
-      />
+      <div className="empty">
+        <BookOpen size={40} strokeWidth={1.25} className="empty-icon" />
+        <h2>Set up your course library</h2>
+        <p className="muted">
+          Import the cohort lessons once, then pick a course and ask anything — and I’ll teach it, with
+          the lessons it came from.
+        </p>
+        <button className="btn primary" onClick={onGoToSettings}>
+          Go to Settings
+        </button>
+      </div>
     )
   }
+
+  const activeCourseName =
+    course === undefined ? 'all courses' : courses.find((c) => c.code === course)?.name ?? course
 
   return (
     <div className="surface">
       <header className="surface-head">
         <h1>Tutor</h1>
-        <p className="muted">Ask anything about the course. Every answer cites the lessons it came from.</p>
+        <p className="muted">Pick a course, ask anything, and I’ll teach it — not just quote the readings.</p>
       </header>
 
+      <div className="course-picker" role="tablist" aria-label="Course">
+        <button
+          className={`course-tab${course === undefined ? ' active' : ''}`}
+          onClick={() => setCourse(undefined)}
+        >
+          All courses
+        </button>
+        {courses.map((c) => (
+          <button
+            key={c.code}
+            className={`course-tab${course === c.code ? ' active' : ''}`}
+            onClick={() => setCourse(c.code)}
+            title={`${c.lessons} lessons`}
+          >
+            <span className="course-code">{c.code}</span> {c.name}
+          </button>
+        ))}
+      </div>
+
       {!engineReady && (
-        <p className="banner danger">
-          Your AI ({engine?.label}) isn’t reachable right now. Check it in Settings.
-        </p>
+        <p className="banner danger">Your AI ({engine?.label}) isn’t reachable right now. Check it in Settings.</p>
       )}
 
       <div className="ask-row">
         <input
           className="input"
-          placeholder="e.g. why do outright bans fail in public policy?"
+          placeholder={`Ask about ${activeCourseName}…`}
           value={q}
           disabled={!engineReady || busy}
           onChange={(e) => setQ(e.target.value)}
           onKeyDown={(e) => e.key === 'Enter' && canAsk && ask()}
         />
         <button className="btn primary" disabled={!canAsk} onClick={ask}>
-          {busy ? 'Thinking…' : 'Ask'}
+          {busy ? 'Teaching…' : 'Ask'}
         </button>
       </div>
 
@@ -83,30 +116,27 @@ export function Tutor(props: {
 
       {result && (
         <article className="answer">
-          <p className="answer-text">{result.answer}</p>
+          <div className="answer-md">
+            <ReactMarkdown>{result.answer}</ReactMarkdown>
+          </div>
           {result.sources.length > 0 && (
             <div className="sources">
               <div className="sources-head">
-                <span className="muted small">Sources</span>
+                <span className="muted small">Drawn from these lessons</span>
                 <button className="chip ghost" title="Save to notebook (coming soon)" disabled>
                   <Bookmark size={14} /> Save
                 </button>
               </div>
-              <ol className="hits">
-                {result.sources.map((h, i) => (
-                  <li key={h.id} className="hit">
-                    <div className="hit-head">
-                      <span className="hit-title">
-                        [{i + 1}] {h.title ?? h.slug}
-                      </span>
-                      <span className="source-chip">
-                        {h.type ?? 'page'} · {Math.round(h.score * 100)}%
-                      </span>
-                    </div>
-                    <p className="hit-text">{snippet(h.text)}</p>
+              <ul className="source-list">
+                {dedupeByTitle(result.sources).map((h) => (
+                  <li key={h.id} className="source-line">
+                    <span className="source-line-title">{h.title ?? h.slug}</span>
+                    <span className="source-chip">
+                      {h.courseName ?? h.type ?? 'page'} · {Math.round(h.score * 100)}%
+                    </span>
                   </li>
                 ))}
-              </ol>
+              </ul>
             </div>
           )}
         </article>
@@ -115,25 +145,15 @@ export function Tutor(props: {
   )
 }
 
-function EmptyState(props: {
-  title: string
-  line: string
-  actionLabel: string
-  onAction: () => void
-}): JSX.Element {
-  return (
-    <div className="empty">
-      <BookOpen size={40} strokeWidth={1.25} className="empty-icon" />
-      <h2>{props.title}</h2>
-      <p className="muted">{props.line}</p>
-      <button className="btn primary" onClick={props.onAction}>
-        {props.actionLabel}
-      </button>
-    </div>
-  )
-}
-
-function snippet(text: string, max = 240): string {
-  const clean = text.replace(/\s+/g, ' ').trim()
-  return clean.length > max ? clean.slice(0, max) + '…' : clean
+// Several chunks often come from the same lesson; show each lesson once.
+function dedupeByTitle(hits: TutorAnswer['sources']): TutorAnswer['sources'] {
+  const seen = new Set<string>()
+  const out: TutorAnswer['sources'] = []
+  for (const h of hits) {
+    const key = h.title ?? h.slug
+    if (seen.has(key)) continue
+    seen.add(key)
+    out.push(h)
+  }
+  return out
 }

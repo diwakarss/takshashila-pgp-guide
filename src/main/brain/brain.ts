@@ -8,11 +8,15 @@ export type PageRecord = {
   slug: string
   type?: string | null
   title?: string | null
+  courseCode?: string | null
+  courseName?: string | null
   frontmatter?: Record<string, unknown> | null
   markdown?: string | null
   contentHash?: string | null
   capturedAt?: string | null
 }
+
+export type CourseSummary = { code: string; name: string; lessons: number }
 
 export type ChunkRecord = {
   ordinal: number
@@ -28,6 +32,7 @@ export type SearchHit = {
   text: string
   title: string | null
   type: string | null
+  courseName: string | null
   score: number // cosine similarity in [0,1], higher = closer
 }
 
@@ -81,12 +86,21 @@ export class Brain {
    *  restrict to one source; default searches both. */
   async search(
     queryEmbedding: number[],
-    opts: { limit?: number; source?: Source } = {}
+    opts: { limit?: number; source?: Source; courseCode?: string } = {}
   ): Promise<SearchHit[]> {
     const limit = opts.limit ?? 8
     const qlit = toVectorLiteral(queryEmbedding)
-    const where = opts.source ? `WHERE c.source = $2` : ''
-    const params: unknown[] = opts.source ? [qlit, opts.source] : [qlit]
+    const conds: string[] = []
+    const params: unknown[] = [qlit]
+    if (opts.source) {
+      params.push(opts.source)
+      conds.push(`c.source = $${params.length}`)
+    }
+    if (opts.courseCode) {
+      params.push(opts.courseCode)
+      conds.push(`p.course_code = $${params.length}`)
+    }
+    const where = conds.length ? `WHERE ${conds.join(' AND ')}` : ''
     // `<=>` is cosine distance in pgvector; similarity = 1 - distance.
     const res = await this.db.query<{
       id: string
@@ -96,10 +110,11 @@ export class Brain {
       text: string
       title: string | null
       type: string | null
+      course_name: string | null
       distance: number
     }>(
       `SELECT c.id, c.slug, c.source, c.ordinal, c.text,
-              p.title, p.type,
+              p.title, p.type, p.course_name,
               (c.embedding <=> $1) AS distance
          FROM chunks c
          JOIN pages p ON p.slug = c.slug
@@ -116,8 +131,41 @@ export class Brain {
       text: r.text,
       title: r.title,
       type: r.type,
+      courseName: r.course_name,
       score: 1 - Number(r.distance)
     }))
+  }
+
+  /** List the courses present in the corpus, with lesson counts. */
+  async courses(): Promise<CourseSummary[]> {
+    const res = await this.db.query<{ code: string | null; name: string | null; lessons: number }>(
+      `SELECT course_code AS code, course_name AS name, count(*)::int AS lessons
+         FROM pages WHERE source = 'corpus' AND course_code IS NOT NULL
+        GROUP BY course_code, course_name
+        ORDER BY lessons DESC`
+    )
+    return res.rows
+      .filter((r): r is { code: string; name: string; lessons: number } => !!r.code && !!r.name)
+      .map((r) => ({ code: r.code, name: r.name, lessons: r.lessons }))
+  }
+
+  /** Backfill course_code/name for every corpus page using `classify`. Cheap
+   *  (no re-embedding) — used to upgrade brains imported before courses. */
+  async retagCourses(classify: (slug: string, title: string | null) => { code: string; name: string }): Promise<number> {
+    const pages = await this.db.query<{ slug: string; title: string | null }>(
+      `SELECT slug, title FROM pages WHERE source = 'corpus'`
+    )
+    let updated = 0
+    for (const p of pages.rows) {
+      const c = classify(p.slug, p.title)
+      await this.db.query(`UPDATE pages SET course_code = $1, course_name = $2 WHERE slug = $3`, [
+        c.code,
+        c.name,
+        p.slug
+      ])
+      updated++
+    }
+    return updated
   }
 
   async stats(): Promise<{ pages: number; chunks: number; bySource: Record<string, number> }> {
@@ -145,10 +193,11 @@ export class SourceWriter {
   async upsertPage(page: PageRecord, chunks: ChunkRecord[]): Promise<void> {
     await this.db.transaction(async (tx) => {
       await tx.query(
-        `INSERT INTO pages (slug, source, type, title, frontmatter, markdown, content_hash, captured_at, updated_at)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, now())
+        `INSERT INTO pages (slug, source, type, title, course_code, course_name, frontmatter, markdown, content_hash, captured_at, updated_at)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, now())
          ON CONFLICT (slug) DO UPDATE SET
            source = EXCLUDED.source, type = EXCLUDED.type, title = EXCLUDED.title,
+           course_code = EXCLUDED.course_code, course_name = EXCLUDED.course_name,
            frontmatter = EXCLUDED.frontmatter, markdown = EXCLUDED.markdown,
            content_hash = EXCLUDED.content_hash, captured_at = EXCLUDED.captured_at,
            updated_at = now()`,
@@ -157,6 +206,8 @@ export class SourceWriter {
           this.source,
           page.type ?? null,
           page.title ?? null,
+          page.courseCode ?? null,
+          page.courseName ?? null,
           page.frontmatter ? JSON.stringify(page.frontmatter) : null,
           page.markdown ?? null,
           page.contentHash ?? null,

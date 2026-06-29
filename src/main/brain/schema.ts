@@ -18,12 +18,19 @@ CREATE TABLE IF NOT EXISTS pages (
   source       TEXT NOT NULL CHECK (source IN ('corpus', 'private')),
   type         TEXT,
   title        TEXT,
+  course_code  TEXT,
+  course_name  TEXT,
   frontmatter  JSONB,
   markdown     TEXT,
   content_hash TEXT,
   captured_at  TIMESTAMPTZ,
   updated_at   TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+
+-- Upgrade brains created before course columns existed (no re-import needed;
+-- retagCourses() backfills the values from the slug classifier).
+ALTER TABLE pages ADD COLUMN IF NOT EXISTS course_code TEXT;
+ALTER TABLE pages ADD COLUMN IF NOT EXISTS course_name TEXT;
 
 CREATE TABLE IF NOT EXISTS chunks (
   id        TEXT PRIMARY KEY,
