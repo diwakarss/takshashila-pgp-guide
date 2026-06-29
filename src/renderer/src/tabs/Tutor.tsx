@@ -40,7 +40,7 @@ export function Tutor(props: {
     if (!illusOn || !spec || illus[spec.id]) return
     setIllus((p) => ({ ...p, [spec.id]: { status: 'drawing' } }))
     void window.pgp
-      .generateIllustration(spec)
+      .generateIllustration(spec, course || undefined)
       .then((img: IllustrationImage) =>
         setIllus((p) => ({
           ...p,

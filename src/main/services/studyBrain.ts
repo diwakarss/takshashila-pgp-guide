@@ -5,7 +5,23 @@ import { Brain } from '../brain/brain'
 import { nomicEmbedder } from '../embed/embedder'
 import { importDirectory, type ImportProgress, type ImportResult } from '../corpus/import'
 import { classifyCourse } from '../corpus/course'
-import type { BrainStats, CorpusStatus, CourseSummary, SearchHit } from '../../shared/ipc'
+import { imageEngine } from '../illustrate/imageEngine'
+import type {
+  BrainStats,
+  CorpusStatus,
+  CourseSummary,
+  IllustrationImage,
+  IllustrationSpec,
+  SearchHit
+} from '../../shared/ipc'
+
+function slugify(s: string): string {
+  return s
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 64)
+}
 
 // Owns the brain + embedder for the running app. The renderer reaches this
 // only through IPC handlers (registered in main/index.ts). The brain file
@@ -79,6 +95,46 @@ class StudyBrainService {
     const brain = await this.open()
     const q = await nomicEmbedder.embedQuery(query)
     return brain.search(q, { limit, courseCode })
+  }
+
+  /**
+   * Resolve a slide's illustration: reuse a library concept if one matches
+   * (instant, free), otherwise generate it once, save it to the library, and
+   * return it. Concept-keyed by embedding, so the same idea is never redrawn.
+   */
+  async resolveIllustration(spec: IllustrationSpec, courseCode?: string): Promise<IllustrationImage> {
+    const brain = await this.open()
+    const emb = await nomicEmbedder.embedQuery(spec.title)
+    const match = await brain.matchConcept(emb, { courseCode })
+    if (match) {
+      const dataUrl = imageEngine.read(match.imageFile)
+      if (dataUrl) return { id: spec.id, title: spec.title, dataUrl }
+    }
+    if (!imageEngine.isAvailable()) {
+      return { id: spec.id, title: spec.title, error: 'image generator not available' }
+    }
+    try {
+      const { dataUrl, file } = await imageEngine.generate(spec.title, spec.composition)
+      await brain.upsertConcept({
+        key: slugify(spec.title) || `concept-${Date.now()}`,
+        title: spec.title,
+        courseCode: courseCode ?? null,
+        description: spec.title,
+        composition: spec.composition,
+        imageFile: file,
+        embedding: emb
+      })
+      return { id: spec.id, title: spec.title, dataUrl }
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e)
+      const quota = /429|quota|billing|insufficient|exceeded/i.test(msg)
+      return { id: spec.id, title: spec.title, error: msg, quota }
+    }
+  }
+
+  async conceptCount(): Promise<number> {
+    const brain = await this.open()
+    return brain.conceptCount()
   }
 }
 

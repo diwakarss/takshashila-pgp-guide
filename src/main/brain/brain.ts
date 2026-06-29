@@ -18,6 +18,18 @@ export type PageRecord = {
 
 export type CourseSummary = { code: string; name: string; lessons: number }
 
+export type ConceptRecord = {
+  key: string
+  title: string
+  courseCode?: string | null
+  description?: string | null
+  composition?: string | null
+  imageFile: string
+  embedding: number[]
+}
+
+export type ConceptMatch = { key: string; title: string; imageFile: string; score: number }
+
 export type ChunkRecord = {
   ordinal: number
   text: string
@@ -134,6 +146,54 @@ export class Brain {
       courseName: r.course_name,
       score: 1 - Number(r.distance)
     }))
+  }
+
+  /** Nearest drawn concept to a query embedding, if close enough. Optionally
+   *  prefer the same course. Returns null when nothing is similar enough. */
+  async matchConcept(
+    queryEmbedding: number[],
+    opts: { threshold?: number; courseCode?: string } = {}
+  ): Promise<ConceptMatch | null> {
+    const threshold = opts.threshold ?? 0.85
+    const qlit = toVectorLiteral(queryEmbedding)
+    const res = await this.db.query<{ key: string; title: string; image_file: string; distance: number }>(
+      `SELECT key, title, image_file, (embedding <=> $1) AS distance
+         FROM concepts
+        WHERE embedding IS NOT NULL
+        ORDER BY embedding <=> $1
+        LIMIT 1`,
+      [qlit]
+    )
+    const row = res.rows[0]
+    if (!row) return null
+    const score = 1 - Number(row.distance)
+    return score >= threshold ? { key: row.key, title: row.title, imageFile: row.image_file, score } : null
+  }
+
+  /** Add (or replace) a drawn concept in the library. */
+  async upsertConcept(c: ConceptRecord): Promise<void> {
+    await this.db.query(
+      `INSERT INTO concepts (key, title, course_code, description, composition, image_file, embedding)
+       VALUES ($1, $2, $3, $4, $5, $6, $7)
+       ON CONFLICT (key) DO UPDATE SET
+         title = EXCLUDED.title, course_code = EXCLUDED.course_code, description = EXCLUDED.description,
+         composition = EXCLUDED.composition, image_file = EXCLUDED.image_file, embedding = EXCLUDED.embedding`,
+      [
+        c.key,
+        c.title,
+        c.courseCode ?? null,
+        c.description ?? null,
+        c.composition ?? null,
+        c.imageFile,
+        toVectorLiteral(c.embedding)
+      ]
+    )
+  }
+
+  /** How many concepts are in the library. */
+  async conceptCount(): Promise<number> {
+    const r = await this.db.query<{ count: number }>(`SELECT count(*)::int AS count FROM concepts`)
+    return r.rows[0]?.count ?? 0
   }
 
   /** List the courses present in the corpus, with lesson counts. */

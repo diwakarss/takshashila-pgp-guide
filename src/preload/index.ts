@@ -30,8 +30,8 @@ const api = {
   engineStatus: (): Promise<EngineStatus> => ipcRenderer.invoke(IPC.engineStatus),
   askTutor: (req: AskRequest): Promise<TutorAnswer> => ipcRenderer.invoke(IPC.tutorAsk, req),
   illustrationAvailable: (): Promise<boolean> => ipcRenderer.invoke(IPC.illustrationAvailable),
-  generateIllustration: (spec: IllustrationSpec): Promise<IllustrationImage> =>
-    ipcRenderer.invoke(IPC.illustrationGenerate, spec),
+  generateIllustration: (spec: IllustrationSpec, courseCode?: string): Promise<IllustrationImage> =>
+    ipcRenderer.invoke(IPC.illustrationGenerate, { spec, courseCode }),
 
   /** Subscribe to import progress. Returns an unsubscribe fn. */
   onImportProgress: (cb: (p: ImportProgress) => void): (() => void) => {

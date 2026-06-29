@@ -101,16 +101,11 @@ function registerIpc(): void {
 
   ipcMain.handle(IPC.illustrationAvailable, () => imageEngine.isAvailable())
 
-  ipcMain.handle(IPC.illustrationGenerate, async (_e, spec: IllustrationSpec): Promise<IllustrationImage> => {
-    try {
-      const dataUrl = await imageEngine.generate(spec.title, spec.composition)
-      return { id: spec.id, title: spec.title, dataUrl }
-    } catch (e) {
-      const msg = e instanceof Error ? e.message : String(e)
-      const quota = /429|quota|billing|insufficient|exceeded/i.test(msg)
-      return { id: spec.id, title: spec.title, error: msg, quota }
-    }
-  })
+  ipcMain.handle(
+    IPC.illustrationGenerate,
+    (_e, req: { spec: IllustrationSpec; courseCode?: string }): Promise<IllustrationImage> =>
+      studyBrain.resolveIllustration(req.spec, req.courseCode)
+  )
 }
 
 // Surface crashes that would otherwise quit the app silently.
@@ -150,13 +145,14 @@ app.whenReady().then(() => {
           if (process.env['PGP_DEV_ILLUS'] && imageEngine.isAvailable()) {
             for (const slide of ans.slides) {
               if (!slide.illustration) continue
-              try {
-                const img = await imageEngine.generate(slide.illustration.title, slide.illustration.composition)
-                console.log(`[pgp] dev illustration OK "${slide.illustration.title}" (${img.length} chars)`)
-              } catch (err) {
-                console.error(`[pgp] dev illustration FAILED "${slide.illustration.title}":`, err)
-              }
+              const res = await studyBrain.resolveIllustration(slide.illustration)
+              console.log(
+                res.dataUrl
+                  ? `[pgp] dev illustration OK "${slide.illustration.title}" (${res.dataUrl.length} chars)`
+                  : `[pgp] dev illustration FAILED "${slide.illustration.title}": ${res.error}`
+              )
             }
+            console.log('[pgp] dev concept library size:', await studyBrain.conceptCount())
           }
         }
       } catch (e) {

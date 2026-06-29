@@ -50,19 +50,30 @@ export class DesignBinaryImageEngine {
     return resolveDesignBin() !== null
   }
 
-  /** Generate (or return cached) a PNG for a concept; resolves to a data URL. */
-  async generate(title: string, composition: string): Promise<string> {
+  /** Generate (or return cached) a PNG for a concept; resolves to its data URL
+   *  and the cache filename (recorded in the concept library for reuse). */
+  async generate(title: string, composition: string): Promise<{ dataUrl: string; file: string }> {
     const bin = resolveDesignBin()
     if (!bin) throw new Error('image generator not available on this machine')
     const brief = buildIllustrationBrief(title, composition)
     const key = createHash('sha256').update(brief).digest('hex').slice(0, 16)
-    const out = join(cacheDir(), `${key}.png`)
+    const file = `${key}.png`
+    const out = join(cacheDir(), file)
     if (!existsSync(out)) {
       await run(bin, ['generate', '--brief', brief, '--output', out], 150_000)
     }
-    const buf = readFileSync(out)
-    return `data:image/png;base64,${buf.toString('base64')}`
+    return { dataUrl: toDataUrl(out), file }
   }
+
+  /** Read an already-drawn library image (by cache filename) as a data URL. */
+  read(file: string): string | null {
+    const p = join(cacheDir(), file)
+    return existsSync(p) ? toDataUrl(p) : null
+  }
+}
+
+function toDataUrl(path: string): string {
+  return `data:image/png;base64,${readFileSync(path).toString('base64')}`
 }
 
 export const imageEngine = new DesignBinaryImageEngine()

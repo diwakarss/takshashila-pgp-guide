@@ -63,6 +63,22 @@ describe('Brain (PGLite + pgvector)', () => {
     expect(corpusOnly.some((h) => h.text === 'private chunk')).toBe(false)
   })
 
+  it('concept library: upserts and matches by embedding above threshold', async () => {
+    await brain.upsertConcept({
+      key: 'elasticity',
+      title: 'Elasticity of demand',
+      courseCode: 'PP231',
+      imageFile: 'elasticity.png',
+      embedding: vec(7)
+    })
+    // A near-identical concept vector matches; a far one does not.
+    const hit = await brain.matchConcept(vec(7), { threshold: 0.85 })
+    expect(hit?.key).toBe('elasticity')
+    expect(hit?.imageFile).toBe('elasticity.png')
+    expect(await brain.matchConcept(vec(200), { threshold: 0.85 })).toBeNull()
+    expect(await brain.conceptCount()).toBe(1)
+  })
+
   it('rejects embeddings of the wrong dimension', async () => {
     await expect(
       brain.corpusWriter.upsertPage({ slug: 'bad' }, [{ ordinal: 0, text: 'x', embedding: [1, 2, 3] }])

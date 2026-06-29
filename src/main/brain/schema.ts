@@ -50,6 +50,19 @@ CREATE TABLE IF NOT EXISTS edges (
 
 CREATE INDEX IF NOT EXISTS chunks_source_idx ON chunks (source);
 CREATE INDEX IF NOT EXISTS pages_source_idx  ON pages (source);
+
+-- Illustration library: one row per drawn concept. Matched by embedding so a
+-- concept is drawn ONCE and reused across questions/phrasings (no per-answer
+-- regeneration). Ships with the corpus so students get illustrations for free.
+CREATE TABLE IF NOT EXISTS concepts (
+  key         TEXT PRIMARY KEY,
+  title       TEXT NOT NULL,
+  course_code TEXT,
+  description TEXT,
+  composition TEXT,
+  image_file  TEXT NOT NULL,
+  embedding   vector(${EMBED_DIM})
+);
 `
 // Note: no ANN index yet. At Phase 0 scale (~2 courses, low thousands of
 // chunks) exact cosine scan is sub-millisecond. HNSW vs IVFFlat is an
