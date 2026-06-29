@@ -96,9 +96,39 @@ function registerIpc(): void {
   )
 }
 
+// Surface crashes that would otherwise quit the app silently.
+process.on('uncaughtException', (e) => console.error('[pgp] uncaughtException:', e))
+process.on('unhandledRejection', (e) => console.error('[pgp] unhandledRejection:', e))
+
 app.whenReady().then(() => {
   registerIpc()
   createWindow()
+
+  // Dev diagnostic: PGP_DEV_AUTOIMPORT=<n> runs a small import on startup and
+  // logs the outcome, so an import crash is reproducible headlessly.
+  const autoimport = Number(process.env['PGP_DEV_AUTOIMPORT'] ?? '0')
+  if (autoimport > 0) {
+    void (async () => {
+      try {
+        console.log(`[pgp] dev auto-import of ${autoimport} files…`)
+        const r = await studyBrain.importCorpus(
+          (p) => console.log(`[pgp] imported ${p.index}/${p.total} ${p.file} (${p.chunks} chunks)`),
+          autoimport
+        )
+        console.log('[pgp] dev auto-import OK:', JSON.stringify(r))
+        if (process.env['PGP_DEV_AUTOASK']) {
+          const ans = await runTutor(process.env['PGP_DEV_AUTOASK'], {
+            search: (q, limit) => studyBrain.search(q, limit),
+            engine: agentCliEngine
+          })
+          console.log('[pgp] dev auto-ask answer:', ans.answer.slice(0, 400))
+          console.log('[pgp] dev auto-ask sources:', ans.sources.map((s) => s.title ?? s.slug).join(' | '))
+        }
+      } catch (e) {
+        console.error('[pgp] dev auto-import FAILED:', e)
+      }
+    })()
+  }
 
   app.on('activate', () => {
     // macOS: re-create a window when the dock icon is clicked and none are open.

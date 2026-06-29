@@ -7,7 +7,7 @@ import { chunkBody } from './chunk'
 import { importDirectory } from './import'
 import { Brain } from '../brain/brain'
 import { EMBED_DIM } from '../brain/schema'
-import type { Embedder } from '../embed/embedder'
+import type { Embedder } from '../embed/types'
 
 // Deterministic fake embedder — no model download. Maps text to a stable
 // 768-dim unit vector so import + search are exercised end to end.

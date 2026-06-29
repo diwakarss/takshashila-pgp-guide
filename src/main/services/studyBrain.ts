@@ -48,7 +48,7 @@ class StudyBrainService {
     return brain.stats()
   }
 
-  async importCorpus(onProgress: (p: ImportProgress) => void): Promise<ImportResult> {
+  async importCorpus(onProgress: (p: ImportProgress) => void, limit?: number): Promise<ImportResult> {
     if (this.importing) throw new Error('import already in progress')
     this.importing = true
     try {
@@ -57,7 +57,8 @@ class StudyBrainService {
         dir: this.corpusDir(),
         embedder: nomicEmbedder,
         writer: brain.corpusWriter,
-        onProgress
+        onProgress,
+        limit
       })
     } finally {
       this.importing = false

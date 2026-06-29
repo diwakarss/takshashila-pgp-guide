@@ -9,7 +9,12 @@ export default defineConfig({
     plugins: [externalizeDepsPlugin()],
     build: {
       rollupOptions: {
-        input: { index: resolve('src/main/index.ts') }
+        input: {
+          index: resolve('src/main/index.ts'),
+          // utilityProcess child for the embedder — built as its own entry so
+          // it can be fork()ed at out/main/embedderProcess.js.
+          embedderProcess: resolve('src/main/embed/embedderProcess.ts')
+        }
       }
     }
   },

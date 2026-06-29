@@ -2,7 +2,7 @@ import { readdir, readFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { parsePage } from './parse'
 import { chunkBody } from './chunk'
-import type { Embedder } from '../embed/embedder'
+import type { Embedder } from '../embed/types'
 import type { SourceWriter } from '../brain/brain'
 
 export type ImportProgress = {
@@ -25,12 +25,15 @@ export async function importDirectory(opts: {
   embedder: Embedder
   writer: SourceWriter
   onProgress?: (p: ImportProgress) => void
+  /** Dev/diagnostic: import at most this many files. */
+  limit?: number
 }): Promise<ImportResult> {
-  const { dir, embedder, writer, onProgress } = opts
+  const { dir, embedder, writer, onProgress, limit } = opts
   const all = await readdir(dir)
-  const files = all
+  let files = all
     .filter((f) => f.toLowerCase().endsWith('.md') && f.toLowerCase() !== 'readme.md')
     .sort()
+  if (limit && limit > 0) files = files.slice(0, limit)
 
   let pages = 0
   let totalChunks = 0

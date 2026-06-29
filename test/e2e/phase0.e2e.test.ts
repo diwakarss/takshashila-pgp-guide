@@ -4,7 +4,9 @@ import { existsSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { Brain } from '../../src/main/brain/brain'
-import { nomicEmbedder } from '../../src/main/embed/embedder'
+// e2e runs in plain Node (no Electron), so it uses the direct embedder, not
+// the utilityProcess proxy. Same model + contract.
+import { directEmbedder as nomicEmbedder } from '../../src/main/embed/nomicCore'
 import { importDirectory } from '../../src/main/corpus/import'
 
 // Phase 0 acceptance: the REAL pipeline over the REAL corpus with the REAL

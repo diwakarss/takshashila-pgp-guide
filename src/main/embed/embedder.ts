@@ -1,69 +1,84 @@
-import { pipeline, type FeatureExtractionPipeline } from '@huggingface/transformers'
-import { EMBED_DIM } from '../brain/schema'
+import { fork, execSync, type ChildProcess } from 'node:child_process'
+import { join } from 'node:path'
+import { DOC_PREFIX, QUERY_PREFIX } from './contract'
+import type { Embedder } from './types'
 
-// ── Embedding parity contract (eng-review D5) ───────────────────────────────
-// nomic-embed-text REQUIRES task prefixes, and retrieval silently degrades if
-// the corpus and the queries are embedded differently. So everything that
-// affects the vector is pinned here, in ONE place, and reused by both the
-// client (queries + private notes) and — later — the CI pre-embed pipeline:
-//   model id · dtype · task prefixes · pooling · normalization · dimension.
-// Same settings both sides ⇒ comparable vectors by construction.
-export const EMBED_MODEL_ID = 'nomic-ai/nomic-embed-text-v1.5'
-export const EMBED_DTYPE = 'q8' as const // quantized: ~140MB, parity holds as long as both sides match
-export const DOC_PREFIX = 'search_document: '
-export const QUERY_PREFIX = 'search_query: '
-export const POOLING = 'mean' as const
-export const NORMALIZE = true
+// Main-process proxy. Runs the model in a SYSTEM-NODE child process (not
+// Electron's bundled Node, where onnxruntime's native addon SIGTRAPs). The
+// prefix half of the parity contract is applied here; the child applies the
+// pinned pooling/normalization. Lazy: the child spawns on first use.
+//
+// (Production note: students get a pre-embedded corpus and never run this over
+// the corpus. A system-node dependency is acceptable for the builder dev loop;
+// a renderer-WASM path for query/note embedding is a later-phase task.)
 
-/** What the importer and query path depend on. Lets tests inject a fake
- *  embedder instead of downloading the 140MB model. */
-export interface Embedder {
-  /** Embed corpus/document text (applies the document prefix). */
-  embedDocuments(texts: string[]): Promise<number[][]>
-  /** Embed a search query (applies the query prefix). */
-  embedQuery(text: string): Promise<number[]>
-  /** Preload the model so the first real call isn't a cold start (eng D10). */
-  warmup(): Promise<void>
+type Pending = { resolve: (v: number[][]) => void; reject: (e: Error) => void }
+
+function resolveNodeBin(): string {
+  if (process.env['PGP_NODE_BIN']) return process.env['PGP_NODE_BIN']
+  try {
+    const p = execSync('command -v node', { encoding: 'utf8' }).trim()
+    if (p) return p
+  } catch {
+    /* fall through */
+  }
+  return 'node'
 }
 
-class NomicEmbedder implements Embedder {
-  private pipe: Promise<FeatureExtractionPipeline> | null = null
+class NodeChildEmbedder implements Embedder {
+  private child: ChildProcess | null = null
+  private seq = 0
+  private pending = new Map<number, Pending>()
 
-  private get(): Promise<FeatureExtractionPipeline> {
-    if (!this.pipe) {
-      this.pipe = pipeline('feature-extraction', EMBED_MODEL_ID, {
-        dtype: EMBED_DTYPE
-      }) as Promise<FeatureExtractionPipeline>
+  private ensure(): ChildProcess {
+    if (this.child) return this.child
+    const childPath = join(import.meta.dirname, 'embedderProcess.js')
+    const child = fork(childPath, [], {
+      execPath: resolveNodeBin(),
+      stdio: ['ignore', 'inherit', 'inherit', 'ipc']
+    })
+    child.on('message', (m: { id: number; vectors?: number[][]; error?: string }) => {
+      const p = this.pending.get(m.id)
+      if (!p) return
+      this.pending.delete(m.id)
+      if (m.error) p.reject(new Error(m.error))
+      else p.resolve(m.vectors ?? [])
+    })
+    const fail = (reason: string): void => {
+      this.child = null
+      const err = new Error(reason)
+      for (const p of this.pending.values()) p.reject(err)
+      this.pending.clear()
     }
-    return this.pipe
+    child.on('exit', (code) => fail(`embedder process exited (code ${code})`))
+    child.on('error', (e) => fail(`could not start embedder (need Node on PATH): ${e.message}`))
+    this.child = child
+    return child
+  }
+
+  private request(texts: string[]): Promise<number[][]> {
+    const child = this.ensure()
+    const id = ++this.seq
+    return new Promise((resolve, reject) => {
+      this.pending.set(id, { resolve, reject })
+      child.send({ id, texts })
+    })
   }
 
   async warmup(): Promise<void> {
-    await this.get()
-  }
-
-  private async embed(texts: string[]): Promise<number[][]> {
-    if (texts.length === 0) return []
-    const pipe = await this.get()
-    const out = await pipe(texts, { pooling: POOLING, normalize: NORMALIZE })
-    const arr = out.tolist() as number[][]
-    for (const v of arr) {
-      if (v.length !== EMBED_DIM) {
-        throw new Error(`embedder produced ${v.length} dims, expected ${EMBED_DIM}`)
-      }
-    }
-    return arr
+    await this.request([])
   }
 
   embedDocuments(texts: string[]): Promise<number[][]> {
-    return this.embed(texts.map((t) => DOC_PREFIX + t))
+    if (texts.length === 0) return Promise.resolve([])
+    return this.request(texts.map((t) => DOC_PREFIX + t))
   }
 
   async embedQuery(text: string): Promise<number[]> {
-    const [v] = await this.embed([QUERY_PREFIX + text])
+    const [v] = await this.request([QUERY_PREFIX + text])
     return v
   }
 }
 
-/** Process-wide singleton (the model is loaded once). */
-export const nomicEmbedder: Embedder = new NomicEmbedder()
+/** App-wide embedder: runs the model in a system-node child process. */
+export const nomicEmbedder: Embedder = new NodeChildEmbedder()
