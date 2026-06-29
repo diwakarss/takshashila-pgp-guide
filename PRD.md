@@ -279,3 +279,114 @@ One primary action per screen; plain language (never show "API / embeddings / MC
 ---
 
 *Companion: `DESIGN.md` (UI design system + screen specs). Reference mockup produced in the office-hours session (app shell + four tabs + wizard).*
+
+---
+
+## 16. Engineering Review — Locked Decisions (2026-06-29)
+
+Outcome of `/plan-eng-review`. Each decision was made interactively; these are binding for the build.
+
+### Architecture
+- **D1 — Engine adapters:** ship all three in v1 (subscription/agent-CLI, API key, local). Full BYO-LLM vision.
+- **D2 — No-write guard:** two layers, **engine-independent**. A deterministic layer (draft-vs-output diff, net-new-prose heuristics) runs regardless of engine, plus the LLM classifier, plus a **capability gate** that hard-blocks free-form generation on engines below a known bar. The integrity promise must not depend on the weakest model a student can pick.
+- **D3 — Sync never clobbers private:** enforce, don't assert. Source-scoped **write-fence** (sync writes can't address private rows) + transactional sync that aborts on any private-row touch + a **pre-sync private snapshot** for rollback + a mandatory **destructive test**.
+- **D4 — Agent-CLI path:** stays the recommended wizard default (builder's call), but **hardened**: pinned/tested CLI versions + drift detection + startup health-check + plain-language fallback to the API-key path when broken/absent.
+- **D5 — Embedding parity:** pin the nomic **prefix convention** as a contract (`search_document:` corpus / `search_query:` queries) + pinned pooling/normalization + a **vector-parity test** and a **retrieval-smoke test** in Phase 0(b). (nomic degrades 5–10 MTEB silently on prefix mismatch.)
+
+### Code quality
+- **D6 — EngineCapabilities:** one descriptor per adapter (`quality_tier, supports_images, supports_streaming, context_window, cost_per_token, can_grade_freeform, passes_nowrite_gate`) is the single source of truth; wizard, quiz, projects, illustrations, and spend all read from it. Kills 5-way duplication.
+- **D7 — Scholar port:** **manual** one-time port for v1; auto-converter deferred to `TODOS.md`.
+
+### Tests
+- **D8 — Test strategy:** full pyramid committed in the plan — Vitest unit + integration (brain/sync/credential-store in packaged context) + Playwright-for-Electron E2E (wizard, Tutor) + an **eval harness** for `[→EVAL]` paths. CI runs unit+integration on every push and gates merge; E2E + evals run pre-release. Tests written alongside each codepath, per phase.
+- **D9 — Integrity gate:** the no-write **adversarial eval is a hard release gate** for Projects — a curated corpus (direct asks, role-play framing, "fix this" rewrites, multilingual, incremental-paragraph attacks) must be **100% blocked across every engine tier**, re-run in CI on any guard/adapter change. Corpus curated with a real cohort-mate's phrasing.
+
+### Performance
+- **D10 — Phase 0 budgets:** spikes get **numeric pass/fail** on a deliberately weak reference machine (first-import time, Tutor query end-to-end ≤ ~2–3s, warm query-embed ≤ ~300ms) + **embedder warm-up** during auto-setup + an HNSW-vs-IVFFlat choice driven by measured build-vs-query tradeoff.
+- **D11 — Install weight:** first-install **size budget**; text + vectors download first (app usable fast), **illustrations lazy-load** by concept key and cache, kept off the delta-sync hot path.
+
+### Outside voice (Codex) — builder decisions
+- **OV-1 (legality/governance, Codex #1/#6):** **noted as risk, keep building.** Not treated as a v1 blocker (see Failure Modes). Corpus legality + publish-governance carried as known risks.
+- **OV-2 (MVP validates thesis, Codex #4):** **build order unchanged.** The builder is cohort user-zero and dogfoods every phase on the real corpus before anyone else installs, so spine→Tutor→…→Projects sequencing self-validates the connective flow.
+- **OV-3 (telemetry/trust, Codex #2/#7):** **telemetry OFF by default + explicit onboarding opt-in;** correct the "fully local and private" one-liner to honest local-first wording.
+
+### Residual risks the builder accepted (not mitigated in v1)
+- **Code signing skipped** (TODO-1 declined) — unsigned installers; "unknown developer" prompts are accepted friction for the small known cohort.
+- **Assignment scrape has no fallback** (TODO-2 declined) — a markup change or staff objection breaks the Projects assignment list with **no manual-import fallback and a silent-failure path**. Flagged as the one critical gap below.
+- **Corpus legality** (OV-1) — embedding/transcribing/redistributing third-party readings + recordings via R2 proceeds on the "cohort already has access" assumption without written Takshashila sign-off.
+
+## 17. What already exists (reuse posture)
+
+- **Builder's gbrain** (lessons, extracted readings, ASR'd transcripts + study notes, knowledge graph) — the master content source the publish pipeline exports from. Reused, not rebuilt.
+- **`takshashila-scholar`** (Bardach 8-step + India lenses + four commitments) — ported model-neutrally (D7), not reinvented.
+- **`ian-xiaohei`** illustration method — method ported, not its Chinese-text runtime.
+- **Open Takshashila** assignment list — scraped into the corpus bundle (no fallback yet, see residual risk).
+- **PGLite + pgvector** (`@electric-sql/pglite-pgvector`, pgvector 0.8) — confirmed viable in Electron; storage bet is sound, not custom-built.
+- **`claude -p` subprocess pattern** — the builder's existing widget already drives an agent CLI; the subscription adapter reuses that mechanism.
+
+## 18. NOT in scope (v1)
+
+- Cohort leaderboard (needs shared backend + identity) — PRD §8.3, deferred.
+- Per-student corpus tokens (cohort-wide token for v1) — PRD §7.3, later upgrade.
+- Scholar auto-converter — `TODOS.md`, manual port for v1.
+- Code signing — declined for v1 (residual risk).
+- Assignment-scrape manual-import fallback — declined for v1 (residual risk).
+- Hosted backend / per-user cloud brain / token billing / mobile / multi-user — PRD §5 non-goals.
+
+## 19. Failure modes (per new codepath)
+
+| Codepath | Realistic failure | Test? | Error handling? | User sees? |
+|---|---|---|---|---|
+| Sync vs private data | Sync clobbers the capstone | ✅ destructive test (T2) | ✅ write-fence + snapshot rollback | n/a — prevented |
+| No-write guard | Ghostwrite slips past on weak engine | ✅ adversarial gate (T3) | ✅ deterministic layer + capability gate | "I can coach and proofread — you write this part" |
+| Embedding | Prefix mismatch → worse retrieval | ✅ parity + smoke (T4) | ✅ pinned contract | n/a — prevented |
+| Agent-CLI path | Upstream CLI bump bricks the path | ⚠️ integration (T6) | ✅ health-check + API-key fallback | plain-language fallback prompt |
+| **Assignment scrape** | **Markup change / staff objection** | **❌ none** | **❌ no fallback (declined)** | **❌ silent — stale/empty list** |
+| First install | Bundle too big on slow bandwidth | ⚠️ — | ✅ text+vectors first, lazy images | progress bar, usable early |
+| Corpus legality | Takedown / publisher objection | ❌ external | ❌ process risk (declined) | n/a — external |
+
+**Critical gap (1):** Assignment scrape failure is the only path that is untested, unhandled, AND silent — accepted by the builder (TODO-2 declined). Revisit before Projects ships to real users.
+
+## 20. Worktree parallelization strategy
+
+| Lane | Modules | Depends on |
+|---|---|---|
+| A — Brain & sync | `brain/`, `sync/` | — |
+| B — Engine layer | `engine/` (3 adapters, EngineCapabilities, CLI hardening) | — |
+| C — Embedder & parity | `embedder/`, `scripts/publish-corpus/` | — |
+| D — Test infra & CI | `.github/workflows/`, `test/`, `evals/` | — (cross-cutting, start immediately) |
+
+**Execution:** Launch A + B + C + D in parallel worktrees during Phase 0 — they touch disjoint modules. All four converge at the wizard/auto-setup integration point, which is the barrier before any UI work. **Conflict flag:** the no-write guard (T1) and the integrity eval (T3) both touch `guard/` — keep them in one lane (sequential) to avoid merge conflicts. Phase 0 spikes must all be green before Tutor UI begins.
+
+## 21. Implementation Tasks
+Synthesized from this review. P1 blocks ship; P2 same-branch; P3 follow-up.
+
+- [ ] **T1 (P1, human: ~2d / CC: ~30min)** — no-write-guard — Two-layer guard: deterministic diff/heuristic + classifier + capability gate (D2)
+- [ ] **T2 (P1, human: ~2d / CC: ~30min)** — brain-sync — Write-fence + transactional sync + pre-sync private snapshot + destructive test (D3)
+- [ ] **T3 (P1, human: ~1d / CC: ~20min)** — integrity-eval — No-write adversarial corpus + hard release gate, 100% across engine tiers (D9)
+- [ ] **T4 (P1, human: ~1d / CC: ~20min)** — embedder — Pin prefix/pooling/normalization contract + vector-parity + retrieval-smoke test (D5)
+- [ ] **T5 (P2, human: ~4h / CC: ~15min)** — engine — Single EngineCapabilities descriptor, read everywhere (D6)
+- [ ] **T6 (P2, human: ~1d / CC: ~20min)** — engine — Agent-CLI hardening: version pin + drift detect + health-check + API-key fallback (D4)
+- [ ] **T7 (P1, human: ~2d / CC: ~30min)** — test-infra — Vitest + integration + Playwright-Electron + eval harness, CI-gated per phase (D8)
+- [ ] **T8 (P2, human: ~1d / CC: ~20min)** — perf — Phase 0 numeric budgets + embedder warm-up + HNSW/IVFFlat choice (D10)
+- [ ] **T9 (P2, human: ~4h / CC: ~15min)** — corpus — Lazy-load illustrations + first-install size budget (D11)
+- [ ] **T10 (P2, human: ~3h / CC: ~10min)** — privacy — Telemetry off-by-default opt-in + honest one-liner wording (OV-3)
+- [ ] **T11 (P3, human: ~15min / CC: ~3min)** — docs — Fix 4-vs-5 surface contradiction (PRD §4/§6 + DESIGN) (Codex #5)
+- [ ] **T12 (P2, human: ~1d / CC: ~20min)** — design — Reconcile Tutor + Projects density with one-primary-action; run /plan-design-review (TODO-3)
+- [ ] **T13 (P3, human: ~1d / CC: ~30min)** — scholar — Manual port of scholar prompts to model-neutral templates (D7)
+
+## GSTACK REVIEW REPORT
+
+| Review | Trigger | Why | Runs | Status | Findings |
+|--------|---------|-----|------|--------|----------|
+| CEO Review | `/plan-ceo-review` | Scope & strategy | 0 | — | not run |
+| Codex Review | `/codex review` | Independent 2nd opinion | 1 | issues_found | 10 missed-problem findings, 3 actioned |
+| Eng Review | `/plan-eng-review` | Architecture & tests (required) | 1 | issues_open | 10 issues, 1 critical gap |
+| Design Review | `/plan-design-review` | UI/UX gaps | 0 | — | recommended (T12) |
+| DX Review | `/plan-devex-review` | Developer experience gaps | 0 | — | not run |
+
+- **CODEX:** outside voice surfaced legality/governance, telemetry-trust, MVP-thesis, and a 4-vs-5 scope doc bug; 3 actioned (legality→risk, build-order kept, telemetry→opt-in), rest routed to tasks/TODOs.
+- **CROSS-MODEL:** no contradictions; Codex independently agreed the agent-CLI default is high-friction for non-tech users (builder kept it, hardened via D4).
+- **UNRESOLVED:** 0 decisions left open.
+- **VERDICT:** ENG review complete — 10 issues resolved into binding decisions + 13 implementation tasks. 1 accepted critical gap (assignment-scrape silent failure) and corpus legality carried as builder-accepted risks. Design review (T12) recommended before building Tutor/Projects.
+

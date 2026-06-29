@@ -168,3 +168,102 @@ For every data surface specify: **loading** (progress + label), **empty** (icon 
 - Replace the proposed palette/wordmark with **official Takshashila brand** once available.
 - Confirm the **reading serif** choice with a real transcript and a real policy brief.
 - Validate the **wizard and per-tab tours** by watching one non-technical cohort-mate go through them unaided (the real test).
+
+---
+
+## 10. Design Review — Locked Decisions (2026-06-29)
+
+Outcome of `/plan-design-review` (full sweep, all five surfaces + wizard, calibrated
+against this DESIGN.md and six AI mockups). Initial design completeness: **7/10**.
+Pass ratings (before fixes): Info Arch 6, States 5, Journey 6, AI-Slop 7, Design-System 6,
+Responsive/A11y 4. The mockups confirmed strong, calm, non-sloppy craft but surfaced
+structural gaps. Five decisions, all resolved toward "specify now":
+
+- **D3 — Unified app shell (Info Arch + Design System).** Built faithfully, each surface
+  resembled a *different* app (the mockups drifted into Perplexity / Notion / a quiz
+  dashboard). Lock a single persistent shell as a hard contract: identical 160px sidebar
+  (same wordmark, same 5 nav items + order, same engine/sync/Settings block) on every
+  surface; the **per-tab accent is the only thing that changes**; a shared component
+  vocabulary (source chip, card, chip, progress bar) reused verbatim across tabs. **Fix
+  the surface count to 5 everywhere** (PRD §4 "four" → five; resolves Codex #5). This is
+  what makes five interaction models read as one study brain (Principle 7).
+- **D4 — Per-surface interaction-state table (States).** Replace the §6 directive with an
+  actual table: for each surface, what the user SEES for loading / empty / error / offline /
+  engine-unavailable. Empty states designed as features (warmth + one primary action +
+  context). Priority on offline/sync and engine-down states (flaky bandwidth + BYO engine).
+- **D5 — Wizard agent-CLI auth flow (Journey).** The recommended default's auth is the
+  hardest onboarding moment and had no UI. **It is NOT a Google/OAuth login** (the mockup
+  invented that and it is wrong). "Use my subscription" = the student picks **which AI
+  provider they have a plan with — Claude (Claude Code CLI) or ChatGPT/OpenAI (Codex CLI)** —
+  and the app drives *that* CLI's own sign-in. Design it as explicit wizard sub-states:
+  choose provider (Claude / ChatGPT) → detect that provider's CLI present → if absent,
+  plain-language "install your AI" step (copy-paste command/link + "check again") → if
+  present-but-unauthenticated, hand off to the CLI's native login → "connected ✓" success →
+  API-key fallback when it won't work (ties to PRD eng-review D4). The other two cards stay:
+  "Paste an API key" (OpenAI / Anthropic / OpenAI-compatible) and "Run free on my PC" (local).
+- **D6 — Responsive reflow + pane focus (Responsive/A11y, was 4/10).** Add per-viewport
+  reflow rules for every multi-pane surface (what collapses to a drawer/tab at the ~960px
+  floor, what stays) + an explicit pane reading/focus order and ARIA landmarks per pane.
+  Projects (four columns) needs a defined narrow layout.
+- **D7 — Projects progressive disclosure (Unresolved → resolved; T12 / Codex #10).** The
+  four-column editor violates "one primary action per screen." Make the **draft editor the
+  primary focus**; show only the **active Bardach step** expanded (others collapse to a slim
+  checklist); collapse the **evidence panel into a summon-on-demand drawer** (opens on "Find
+  evidence" / "Use in a project"); show **coach notes inline** at the relevant line, not as a
+  permanent margin column. Toolbar unchanged. Keeps every capability, stops them shouting at
+  once (Principle 8).
+
+**Deferred to TODOS.md:** dark-mode variants + contrast audit (D9); Takshashila brand /
+wordmark / palette alignment (D10).
+
+## 11. Approved Mockups
+
+Reference renders for implementation (provisional scholarly palette; regenerate after
+Takshashila branding lands). Calm, scholarly, AI-slop-free craft confirmed.
+
+> **These mockups are NON-BINDING placeholders.** They were AI-generated and contain
+> spec inaccuracies (wrong wordmarks like "Scholaris"/"Perplexity"/"Notiora", drifted
+> sidebar nav, a Google login button on the wizard, etc.). Build from the **design system
+> (§3) and the locked decisions (§10)**, NOT from the pixels. Use the mockups only for
+> **general layout and direction** (pane structure, content placement) — every label,
+> brand, and control is authoritative in the spec, not the render.
+
+| Screen | Mockup Path | Notes / constraints from review |
+|--------|-------------|----------------------------------|
+| Tutor (home) | ~/.gstack/projects/diwakarss-takshashila-pgp-guide/designs/pgp-guide-screens-20260629/01-tutor.png | Reference for the unified shell (D3). Two-pane reads cleanly. |
+| Wizard (Pick your AI) | …/02-wizard.png | Clean; but agent-CLI auth needs the D5 sub-states (mockup's Google button is wrong). |
+| Quiz (home) | …/03-quiz.png | Gamification calm, not childish. Watch reward illustration staying intentional not decorative. |
+| Research | …/04-research.png | Perplexity-style as intended; must wear the unified shell (D3), not its own identity. |
+| Notebook | …/05-notebook.png | Bibliography block at page bottom works; apply shared chrome (D3). |
+| Projects (editor) | …/06-projects.png | Shows the density problem — rebuild per D7 progressive disclosure. |
+
+## 12. Design — NOT in scope (v1)
+
+- Full dark-mode variant set + contrast audit — TODOS.md (palette provisional).
+- Final Takshashila palette/wordmark — TODOS.md (external dependency).
+- Per-tab tour *content* design — implementation-time, alongside each surface.
+- Mobile/native layouts — desktop-only per PRD non-goals.
+- Cohort leaderboard UI — PRD §8.3, deferred feature.
+
+## 13. Design — What already exists (reuse)
+
+- This DESIGN.md design system (tokens, type scale, spacing, components, motion) — the
+  reuse base; D3 makes its shell + component vocabulary a hard contract.
+- The office-hours reference mockup (app shell + tabs + wizard) — the structure to match.
+- The six approved mockups above — visual reference per surface.
+
+## GSTACK REVIEW REPORT
+
+| Review | Trigger | Why | Runs | Status | Findings |
+|--------|---------|-----|------|--------|----------|
+| CEO Review | `/plan-ceo-review` | Scope & strategy | 0 | — | not run |
+| Codex Review | `/codex review` | Independent 2nd opinion | 1 | issues_found | 10 missed-problem findings, 3 actioned |
+| Eng Review | `/plan-eng-review` | Architecture & tests (required) | 1 | issues_open | 10 issues, 1 critical gap |
+| Design Review | `/plan-design-review` | UI/UX gaps | 1 | issues_open | score 7/10 → 9/10, 5 decisions, 6 mockups |
+| DX Review | `/plan-devex-review` | Developer experience gaps | 0 | — | not run |
+
+- **CODEX:** outside voice (eng review) surfaced corpus legality/governance, telemetry-trust, MVP-thesis, 4-vs-5 scope bug; design review resolved the 4-vs-5 contradiction via the unified-shell decision (D3).
+- **CROSS-MODEL:** eng + design agree the agent-CLI default is the highest-friction onboarding path (builder kept it, hardened via eng-D4 + design-D5).
+- **VERDICT:** ENG + DESIGN CLEARED — both reviews complete, 0 unresolved decisions. Plan is design-complete (6/7 passes at 8+ after fixes); 5 design decisions + 7 design tasks landed. Run /ship when implementation is ready; run /design-review after build for visual QA.
+
+NO UNRESOLVED DECISIONS
