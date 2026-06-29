@@ -7,19 +7,43 @@ import { Placeholder } from './tabs/Placeholder'
 import { useSystemStatus } from './hooks/useSystemStatus'
 import type { TabId } from './tabs'
 
-// The app shell. One persistent sidebar, one content pane that swaps by tab.
-// Tutor + Settings are real; the other four are designed placeholders until
-// their phases land. Phase 1.2 wraps this in the first-launch wizard.
+// The app shell. Persistent sidebar (nav + per-tab Recents), one content pane.
+// Tutor is a threaded conversation; Recents lets you reopen past threads.
 export function App(): JSX.Element {
   const [tab, setTab] = useState<TabId>('tutor')
   const status = useSystemStatus()
+  // Tutor conversation: which thread is open (null = a fresh one) + a counter
+  // bumped whenever threads change so Recents reloads.
+  const [openThreadId, setOpenThreadId] = useState<string | null>(null)
+  const [threadsVersion, setThreadsVersion] = useState(0)
+
+  const openThread = (id: string | null): void => {
+    setTab('tutor')
+    setOpenThreadId(id)
+  }
+  const threadsChanged = (): void => setThreadsVersion((v) => v + 1)
 
   return (
     <div className="shell">
-      <Sidebar active={tab} onNavigate={setTab} engine={status.engine} stats={status.stats} />
+      <Sidebar
+        active={tab}
+        onNavigate={setTab}
+        engine={status.engine}
+        stats={status.stats}
+        openThreadId={openThreadId}
+        threadsVersion={threadsVersion}
+        onOpenThread={openThread}
+      />
       <main className="content">
         {tab === 'tutor' && (
-          <Tutor ready={status.ready} engine={status.engine} onGoToSettings={() => setTab('settings')} />
+          <Tutor
+            ready={status.ready}
+            engine={status.engine}
+            openThreadId={openThreadId}
+            onOpenThread={setOpenThreadId}
+            onThreadsChanged={threadsChanged}
+            onGoToSettings={() => setTab('settings')}
+          />
         )}
         {tab === 'quiz' && (
           <Placeholder

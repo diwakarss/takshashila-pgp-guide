@@ -1,79 +1,104 @@
-import { useEffect, useState } from 'react'
-import { BookOpen, Pencil, ChevronLeft, ChevronRight, Plus } from 'lucide-react'
+import { useEffect, useRef, useState } from 'react'
+import { BookOpen, Pencil } from 'lucide-react'
 import ReactMarkdown from 'react-markdown'
-import type { CourseSummary, EngineStatus, IllustrationImage, IllustrationSpec, TutorReply } from '../../../shared/ipc'
+import type {
+  CourseSummary,
+  EngineStatus,
+  IllustrationImage,
+  IllustrationSpec,
+  Slide,
+  ThreadDetail,
+  Turn,
+  TutorReply
+} from '../../../shared/ipc'
 
 type IllusEntry = { status: 'drawing' | 'done' | 'error'; dataUrl?: string; error?: string; quota?: boolean }
 
-// Tutor — a threaded conversation. Each ask continues the thread (course-locked);
-// replies are a slide walkthrough (concept) or plain text (simple question), each
-// with follow-up suggestions. (Recents list + top bar land in the next pass.)
-export function Tutor(props: { ready: boolean; engine: EngineStatus | null; onGoToSettings: () => void }): JSX.Element {
-  const { ready, engine, onGoToSettings } = props
+// Tutor — a threaded conversation rendered like a chat: every turn (question +
+// reply) stacked and scrollable, with the follow-up box docked at the bottom.
+// Concept replies render their slides inline; simple replies render as text.
+export function Tutor(props: {
+  ready: boolean
+  engine: EngineStatus | null
+  openThreadId: string | null
+  onOpenThread: (id: string | null) => void
+  onThreadsChanged: () => void
+  onGoToSettings: () => void
+}): JSX.Element {
+  const { ready, engine, openThreadId, onOpenThread, onThreadsChanged, onGoToSettings } = props
   const [courses, setCourses] = useState<CourseSummary[]>([])
   const [course, setCourse] = useState<string>('')
-  const [threadId, setThreadId] = useState<string | undefined>(undefined)
+  const [thread, setThread] = useState<ThreadDetail | null>(null)
   const [q, setQ] = useState('')
-  const [reply, setReply] = useState<TutorReply | null>(null)
-  const [slide, setSlide] = useState(0)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [illusOn, setIllusOn] = useState(false)
   const [illus, setIllus] = useState<Record<string, IllusEntry>>({})
+  const startedIllus = useRef<Set<string>>(new Set())
+  const scrollRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     if (ready) void window.pgp.courses().then(setCourses)
-    void window.pgp.illustrationAvailable().then(setIllusOn)
   }, [ready])
 
-  const engineReady = engine?.available ?? false
-  const slides = reply?.kind === 'slides' ? reply.slides : []
-  const current = slides[slide]
-
+  // Load (or clear) the open thread.
   useEffect(() => {
-    const spec = current?.illustration
-    if (!illusOn || !spec || illus[spec.id]) return
-    setIllus((p) => ({ ...p, [spec.id]: { status: 'drawing' } }))
-    void window.pgp
-      .generateIllustration(spec, course || undefined)
+    if (openThreadId == null) {
+      setThread(null)
+      return
+    }
+    void window.pgp.getThread(openThreadId).then((t) => {
+      setThread(t)
+      if (t?.courseCode) setCourse(t.courseCode)
+    })
+  }, [openThreadId])
+
+  // Keep the latest turn in view.
+  useEffect(() => {
+    const el = scrollRef.current
+    if (el) el.scrollTop = el.scrollHeight
+  }, [thread, busy])
+
+  const engineReady = engine?.available ?? false
+  const courseCode = thread?.courseCode ?? course ?? ''
+
+  // Resolve a slide's illustration once (library hit = instant/free). The ref
+  // dedupes so a single image is never generated twice (e.g. StrictMode).
+  const needIllustration = (turnId: string, spec: IllustrationSpec): void => {
+    const key = `${turnId}:${spec.id}`
+    if (startedIllus.current.has(key)) return
+    startedIllus.current.add(key)
+    setIllus((p) => ({ ...p, [key]: { status: 'drawing' } }))
+    window.pgp
+      .generateIllustration(spec, courseCode || undefined)
       .then((img: IllustrationImage) =>
         setIllus((p) => ({
           ...p,
-          [spec.id]: img.dataUrl ? { status: 'done', dataUrl: img.dataUrl } : { status: 'error', error: img.error, quota: img.quota }
+          [key]: img.dataUrl ? { status: 'done', dataUrl: img.dataUrl } : { status: 'error', error: img.error, quota: img.quota }
         }))
       )
-      .catch((e) => setIllus((p) => ({ ...p, [spec.id]: { status: 'error', error: String(e) } })))
-  }, [current, illusOn, illus, course])
+      .catch((e) => setIllus((p) => ({ ...p, [key]: { status: 'error', error: String(e) } })))
+  }
 
   const ask = async (question: string): Promise<void> => {
-    if (!question.trim()) return
+    if (!question.trim() || busy) return
     setBusy(true)
     setError(null)
-    setIllus({})
-    setSlide(0)
     setQ('')
     try {
-      const res = await window.pgp.askTutor({ question: question.trim(), courseCode: course || undefined, threadId })
-      setThreadId(res.threadId)
-      setReply(res.turn.answer)
+      const res = await window.pgp.askTutor({
+        question: question.trim(),
+        courseCode: thread?.courseCode ?? (course || undefined),
+        threadId: thread?.id
+      })
+      const detail = await window.pgp.getThread(res.threadId)
+      setThread(detail)
+      if (openThreadId !== res.threadId) onOpenThread(res.threadId)
+      onThreadsChanged()
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e))
     } finally {
       setBusy(false)
     }
-  }
-
-  const newConversation = (): void => {
-    setThreadId(undefined)
-    setReply(null)
-    setError(null)
-    setIllus({})
-    setQ('')
-  }
-
-  const onCourseChange = (code: string): void => {
-    setCourse(code)
-    newConversation() // changing course starts a fresh conversation
   }
 
   if (!ready) {
@@ -89,19 +114,22 @@ export function Tutor(props: { ready: boolean; engine: EngineStatus | null; onGo
     )
   }
 
-  const activeCourseName = course ? courses.find((c) => c.code === course)?.name ?? course : 'all courses'
+  const courseName = courseCode ? courses.find((c) => c.code === courseCode)?.name ?? courseCode : 'all courses'
+  const turns = thread?.turns ?? []
+  const lastFollowups = turns.length > 0 ? turns[turns.length - 1].answer.followups : []
 
   return (
-    <div className="surface">
-      <header className="surface-head tutor-head">
-        <div>
-          <h1>Tutor</h1>
-          <p className="muted">Ask anything — I’ll teach concepts as a walkthrough, or just answer simply.</p>
-        </div>
-        <div className="tutor-head-controls">
+    <div className="tutor">
+      <div className="tutor-bar">
+        {thread ? (
+          <span className="course-locked">
+            {courseName}
+            {thread.courseCode ? '' : ''}
+          </span>
+        ) : (
           <label className="course-select">
             <span className="course-select-label">Course</span>
-            <select value={course} onChange={(e) => onCourseChange(e.target.value)} aria-label="Course scope">
+            <select value={course} onChange={(e) => setCourse(e.target.value)} aria-label="Course scope">
               <option value="">All courses</option>
               {courses.map((c) => (
                 <option key={c.code} value={c.code}>
@@ -110,75 +138,46 @@ export function Tutor(props: { ready: boolean; engine: EngineStatus | null; onGo
               ))}
             </select>
           </label>
-          {reply && (
-            <button className="btn" onClick={newConversation} title="New conversation">
-              <Plus size={16} /> New
-            </button>
-          )}
-        </div>
-      </header>
+        )}
+      </div>
 
-      {!engineReady && <p className="banner danger">Your AI ({engine?.label}) isn’t reachable right now.</p>}
+      <div className="thread-scroll" ref={scrollRef}>
+        {turns.length === 0 && !busy && (
+          <div className="thread-welcome">
+            <h2>Ask about {courseName}</h2>
+            <p className="muted">I’ll teach concepts as a walkthrough, or just answer simple questions.</p>
+            <div className="starter-chips">
+              {['Explain thinking in degrees', 'Why do bans fail?', 'What is state capacity?'].map((s) => (
+                <button key={s} className="chip" disabled={!engineReady} onClick={() => ask(s)}>
+                  {s}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
 
-      {!reply && !busy && (
-        <div className="starter-chips">
-          {['Explain thinking in degrees', 'Why do bans fail?', 'What is state capacity?'].map((s) => (
-            <button key={s} className="chip" disabled={!engineReady} onClick={() => ask(s)}>
-              {s}
+        {turns.map((turn) => (
+          <TurnView key={turn.id} turn={turn} illus={illus} onNeedIllustration={needIllustration} />
+        ))}
+
+        {busy && <p className="muted small thinking">Teaching…</p>}
+        {error && <p className="banner danger">Couldn’t answer: {error}</p>}
+      </div>
+
+      {lastFollowups.length > 0 && !busy && (
+        <div className="followups">
+          {lastFollowups.map((f) => (
+            <button key={f} className="chip" onClick={() => ask(f)}>
+              {f}
             </button>
           ))}
-        </div>
-      )}
-
-      {error && <p className="banner danger">Couldn’t answer: {error}</p>}
-      {busy && <p className="muted small" style={{ marginTop: 12 }}>Teaching…</p>}
-
-      {reply && reply.kind === 'slides' && current && (
-        <section className="slide" aria-live="polite">
-          <h2 className="slide-heading">{current.heading}</h2>
-          {current.illustration && <SlideIllustration spec={current.illustration} entry={illus[current.illustration.id]} />}
-          <div className="answer-md">
-            <ReactMarkdown>{toSuperscriptCitations(current.body)}</ReactMarkdown>
-          </div>
-          <nav className="slide-nav">
-            <button className="btn" disabled={slide === 0} onClick={() => setSlide((s) => s - 1)}>
-              <ChevronLeft size={16} /> Back
-            </button>
-            <span className="slide-count">
-              {slide + 1} / {slides.length}
-            </span>
-            <button className="btn primary" disabled={slide >= slides.length - 1} onClick={() => setSlide((s) => s + 1)}>
-              Next <ChevronRight size={16} />
-            </button>
-          </nav>
-        </section>
-      )}
-
-      {reply && reply.kind === 'text' && (
-        <section className="slide answer-md" aria-live="polite">
-          <ReactMarkdown>{toSuperscriptCitations(reply.text)}</ReactMarkdown>
-        </section>
-      )}
-
-      {reply && reply.sources.length > 0 && <SourcesBlock sources={reply.sources} />}
-
-      {reply && reply.followups.length > 0 && (
-        <div className="followups">
-          <span className="muted small">Ask next</span>
-          <div className="starter-chips">
-            {reply.followups.map((f) => (
-              <button key={f} className="chip" disabled={busy} onClick={() => ask(f)}>
-                {f}
-              </button>
-            ))}
-          </div>
         </div>
       )}
 
       <div className="ask-row ask-dock">
         <input
           className="input"
-          placeholder={reply ? 'Ask a follow-up…' : `Ask about ${activeCourseName}…`}
+          placeholder={thread ? 'Ask a follow-up…' : `Ask about ${courseName}…`}
           value={q}
           disabled={!engineReady || busy}
           onChange={(e) => setQ(e.target.value)}
@@ -192,7 +191,57 @@ export function Tutor(props: { ready: boolean; engine: EngineStatus | null; onGo
   )
 }
 
-function SlideIllustration(props: { spec: IllustrationSpec; entry: IllusEntry | undefined }): JSX.Element {
+function TurnView(props: {
+  turn: Turn
+  illus: Record<string, IllusEntry>
+  onNeedIllustration: (turnId: string, spec: IllustrationSpec) => void
+}): JSX.Element {
+  const { turn, illus, onNeedIllustration } = props
+  const a = turn.answer
+  return (
+    <div className="turn">
+      <div className="turn-q">{turn.question}</div>
+      <div className="turn-a">
+        {a.kind === 'slides' ? (
+          a.slides.map((s, i) => (
+            <SlideBlock key={i} turnId={turn.id} slide={s} illus={illus} onNeed={onNeedIllustration} />
+          ))
+        ) : (
+          <div className="answer-md">
+            <ReactMarkdown>{toSuperscriptCitations(a.text)}</ReactMarkdown>
+          </div>
+        )}
+        {a.sources.length > 0 && <Sources sources={a.sources} />}
+      </div>
+    </div>
+  )
+}
+
+function SlideBlock(props: {
+  turnId: string
+  slide: Slide
+  illus: Record<string, IllusEntry>
+  onNeed: (turnId: string, spec: IllustrationSpec) => void
+}): JSX.Element {
+  const { turnId, slide, illus, onNeed } = props
+  useEffect(() => {
+    if (slide.illustration) onNeed(turnId, slide.illustration)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [turnId, slide.illustration?.id])
+
+  const entry = slide.illustration ? illus[`${turnId}:${slide.illustration.id}`] : undefined
+  return (
+    <section className="slide-block">
+      <h3 className="slide-heading">{slide.heading}</h3>
+      {slide.illustration && <Illustration spec={slide.illustration} entry={entry} />}
+      <div className="answer-md">
+        <ReactMarkdown>{toSuperscriptCitations(slide.body)}</ReactMarkdown>
+      </div>
+    </section>
+  )
+}
+
+function Illustration(props: { spec: IllustrationSpec; entry: IllusEntry | undefined }): JSX.Element {
   const { spec, entry } = props
   if (entry?.status === 'done' && entry.dataUrl) {
     return (
@@ -216,7 +265,7 @@ function SlideIllustration(props: { spec: IllustrationSpec; entry: IllusEntry | 
   )
 }
 
-function SourcesBlock(props: { sources: TutorReply['sources'] }): JSX.Element {
+function Sources(props: { sources: TutorReply['sources'] }): JSX.Element {
   return (
     <div className="sources">
       <span className="muted small">Drawn from these lessons</span>
