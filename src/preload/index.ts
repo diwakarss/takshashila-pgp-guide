@@ -7,6 +7,9 @@ import {
   type CorpusStatus,
   type CourseSummary,
   type EngineStatus,
+  type IllustrateRequest,
+  type IllustrationImage,
+  type IllustrationSpec,
   type ImportProgress,
   type ImportResult,
   type SearchHit,
@@ -27,6 +30,11 @@ const api = {
   courses: (): Promise<CourseSummary[]> => ipcRenderer.invoke(IPC.corpusCourses),
   engineStatus: (): Promise<EngineStatus> => ipcRenderer.invoke(IPC.engineStatus),
   askTutor: (req: AskRequest): Promise<TutorAnswer> => ipcRenderer.invoke(IPC.tutorAsk, req),
+  illustrationAvailable: (): Promise<boolean> => ipcRenderer.invoke(IPC.illustrationAvailable),
+  planIllustrations: (req: IllustrateRequest): Promise<IllustrationSpec[]> =>
+    ipcRenderer.invoke(IPC.illustrationPlan, req),
+  generateIllustration: (spec: IllustrationSpec): Promise<IllustrationImage> =>
+    ipcRenderer.invoke(IPC.illustrationGenerate, spec),
 
   /** Subscribe to import progress. Returns an unsubscribe fn. */
   onImportProgress: (cb: (p: ImportProgress) => void): (() => void) => {

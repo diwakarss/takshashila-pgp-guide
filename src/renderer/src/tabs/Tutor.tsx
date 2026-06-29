@@ -1,10 +1,12 @@
 import { useEffect, useState } from 'react'
-import { BookOpen, Bookmark } from 'lucide-react'
+import { BookOpen, Bookmark, Pencil } from 'lucide-react'
 import ReactMarkdown from 'react-markdown'
 import type { CourseSummary, EngineStatus, TutorAnswer } from '../../../shared/ipc'
 
-// Tutor — the default surface. Pick a course to scope the question, ask, and
-// get a taught (not regurgitated) answer with superscript citations.
+type IllusState = { id: string; title: string; status: 'drawing' | 'done' | 'error'; dataUrl?: string }
+
+// Tutor — pick a course, ask, get a taught answer with superscript citations,
+// and (on demand) hand-drawn illustrations when they'd genuinely help.
 export function Tutor(props: {
   ready: boolean
   engine: EngineStatus | null
@@ -12,25 +14,53 @@ export function Tutor(props: {
 }): JSX.Element {
   const { ready, engine, onGoToSettings } = props
   const [courses, setCourses] = useState<CourseSummary[]>([])
-  const [course, setCourse] = useState<string>('') // '' = all courses
+  const [course, setCourse] = useState<string>('')
   const [q, setQ] = useState('')
   const [result, setResult] = useState<TutorAnswer | null>(null)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [illusOn, setIllusOn] = useState(false)
+  const [illustrations, setIllustrations] = useState<IllusState[]>([])
 
   useEffect(() => {
     if (ready) void window.pgp.courses().then(setCourses)
+    void window.pgp.illustrationAvailable().then(setIllusOn)
   }, [ready])
 
   const engineReady = engine?.available ?? false
   const canAsk = ready && engineReady && !busy && q.trim().length > 0
 
+  const illustrate = (question: string, answer: string): void => {
+    setIllustrations([])
+    void (async () => {
+      const specs = await window.pgp.planIllustrations({ question, answer })
+      if (specs.length === 0) return
+      setIllustrations(specs.map((s) => ({ id: s.id, title: s.title, status: 'drawing' })))
+      for (const spec of specs) {
+        window.pgp
+          .generateIllustration(spec)
+          .then((img) =>
+            setIllustrations((prev) =>
+              prev.map((p) => (p.id === spec.id ? { ...p, status: 'done', dataUrl: img.dataUrl } : p))
+            )
+          )
+          .catch(() =>
+            setIllustrations((prev) => prev.map((p) => (p.id === spec.id ? { ...p, status: 'error' } : p)))
+          )
+      }
+    })()
+  }
+
   const ask = async (): Promise<void> => {
     if (!q.trim()) return
+    const question = q.trim()
     setBusy(true)
     setError(null)
+    setIllustrations([])
     try {
-      setResult(await window.pgp.askTutor({ question: q.trim(), courseCode: course || undefined }))
+      const ans = await window.pgp.askTutor({ question, courseCode: course || undefined })
+      setResult(ans)
+      if (illusOn && ans.sources.length > 0) illustrate(question, ans.answer)
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e))
     } finally {
@@ -112,6 +142,26 @@ export function Tutor(props: {
           <div className="answer-md">
             <ReactMarkdown>{toSuperscriptCitations(result.answer)}</ReactMarkdown>
           </div>
+
+          {illustrations.length > 0 && (
+            <div className="illustrations">
+              {illustrations.map((il) => (
+                <figure key={il.id} className="illustration">
+                  {il.status === 'done' && il.dataUrl ? (
+                    <img src={il.dataUrl} alt={il.title} />
+                  ) : il.status === 'error' ? (
+                    <div className="illus-skel error">couldn’t draw this one</div>
+                  ) : (
+                    <div className="illus-skel">
+                      <Pencil size={16} /> drawing “{il.title}”…
+                    </div>
+                  )}
+                  <figcaption>{il.title}</figcaption>
+                </figure>
+              ))}
+            </div>
+          )}
+
           {result.sources.length > 0 && (
             <div className="sources">
               <div className="sources-head">
@@ -140,8 +190,6 @@ export function Tutor(props: {
 }
 
 const SUP = ['⁰', '¹', '²', '³', '⁴', '⁵', '⁶', '⁷', '⁸', '⁹']
-// Turn the model's [n] citation markers into subtle superscripts that match the
-// numbered "drawn from these lessons" list.
 function toSuperscriptCitations(md: string): string {
   return md.replace(/\[(\d{1,2})\]/g, (_m, n: string) =>
     n

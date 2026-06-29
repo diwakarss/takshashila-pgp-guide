@@ -333,6 +333,46 @@ h2 {
   outline: 2px solid color-mix(in srgb, var(--tutor) 50%, transparent);
   outline-offset: 1px;
 }
+/* ── on-demand illustrations ────────────────────────────── */
+.illustrations {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  margin: 18px 0;
+}
+.illustration {
+  margin: 0;
+}
+.illustration img {
+  display: block;
+  width: 100%;
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius-card);
+  background: #fff;
+}
+.illustration figcaption {
+  margin-top: 6px;
+  font-size: 13px;
+  color: var(--muted);
+  text-align: center;
+}
+.illus-skel {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  aspect-ratio: 16 / 9;
+  border: 1px dashed var(--hairline);
+  border-radius: var(--radius-card);
+  color: var(--muted);
+  font-size: 14px;
+  background: color-mix(in srgb, var(--tutor) 3%, transparent);
+}
+.illus-skel.error {
+  color: var(--danger);
+  border-color: color-mix(in srgb, var(--danger) 30%, transparent);
+}
+
 .source-num {
   display: inline-flex;
   align-items: center;

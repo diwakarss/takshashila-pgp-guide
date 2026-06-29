@@ -4,6 +4,9 @@ import { IPC, type AppInfo } from '../shared/ipc'
 import { studyBrain } from './services/studyBrain'
 import { runTutor } from './services/tutor'
 import { agentCliEngine } from './engine/agentCli'
+import { imageEngine } from './illustrate/imageEngine'
+import { planIllustrations } from './illustrate/planner'
+import type { IllustrationSpec } from '../shared/ipc'
 
 // ┌─────────────────────────────────────────────────────────────────────┐
 // │ Main process. Owns the native window + privileged work (brain, fs,   │
@@ -96,6 +99,18 @@ function registerIpc(): void {
       engine: agentCliEngine
     })
   )
+
+  ipcMain.handle(IPC.illustrationAvailable, () => imageEngine.isAvailable())
+
+  ipcMain.handle(IPC.illustrationPlan, (_e, req: { question: string; answer: string }) =>
+    imageEngine.isAvailable() ? planIllustrations(req.question, req.answer, agentCliEngine) : []
+  )
+
+  ipcMain.handle(IPC.illustrationGenerate, async (_e, spec: IllustrationSpec) => ({
+    id: spec.id,
+    title: spec.title,
+    dataUrl: await imageEngine.generate(spec.title, spec.composition)
+  }))
 }
 
 // Surface crashes that would otherwise quit the app silently.
@@ -127,8 +142,16 @@ app.whenReady().then(() => {
               engine: agentCliEngine
             }
           )
-          console.log('[pgp] dev auto-ask answer:', ans.answer.slice(0, 400))
+          console.log('[pgp] dev auto-ask answer:', ans.answer.slice(0, 200))
           console.log('[pgp] dev auto-ask sources:', ans.sources.map((s) => s.title ?? s.slug).join(' | '))
+          if (process.env['PGP_DEV_ILLUS'] && imageEngine.isAvailable()) {
+            const specs = await planIllustrations(process.env['PGP_DEV_AUTOASK']!, ans.answer, agentCliEngine)
+            console.log('[pgp] dev illustration specs:', JSON.stringify(specs.map((s) => s.title)))
+            if (specs[0]) {
+              const img = await imageEngine.generate(specs[0].title, specs[0].composition)
+              console.log(`[pgp] dev illustration[0] "${specs[0].title}" generated, dataUrl ${img.length} chars`)
+            }
+          }
         }
       } catch (e) {
         console.error('[pgp] dev auto-import FAILED:', e)
