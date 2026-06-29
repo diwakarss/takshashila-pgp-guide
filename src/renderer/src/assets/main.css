@@ -333,12 +333,45 @@ h2 {
   outline: 2px solid color-mix(in srgb, var(--tutor) 50%, transparent);
   outline-offset: 1px;
 }
+/* ── slide viewer ───────────────────────────────────────── */
+.slide {
+  background: var(--surface);
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius-card);
+  padding: 22px 24px;
+  margin-top: 14px;
+  min-height: 220px;
+}
+.slide-heading {
+  font-size: 18px;
+  margin: 0 0 12px;
+}
+.slide-nav {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin: 12px 0 4px;
+}
+.slide-nav .btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.slide-count {
+  font-size: 13px;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
 /* ── on-demand illustrations ────────────────────────────── */
 .illustrations {
   display: flex;
   flex-direction: column;
   gap: 16px;
   margin: 18px 0;
+}
+.slide .illustration {
+  margin: 0 0 14px;
 }
 .illustration {
   margin: 0;

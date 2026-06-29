@@ -27,13 +27,11 @@ export const IPC = {
   corpusCourses: 'corpus:courses',
   /** Which engine is connected and whether it's usable right now. */
   engineStatus: 'engine:status',
-  /** Ask the tutor: retrieve + grounded, pedagogical answer. */
+  /** Ask the tutor: retrieve + grounded, slide-based pedagogical answer. */
   tutorAsk: 'tutor:ask',
   /** Is on-demand illustration generation available on this machine? */
   illustrationAvailable: 'illustration:available',
-  /** Plan 0-2 illustrations that would help a given answer. */
-  illustrationPlan: 'illustration:plan',
-  /** Generate (or return cached) one illustration; resolves to a data URL. */
+  /** Generate (or return cached) one illustration; resolves to a data URL or an error reason. */
   illustrationGenerate: 'illustration:generate'
 } as const
 
@@ -91,12 +89,26 @@ export type EngineStatus = {
   available: boolean
 }
 
+export type IllustrationSpec = { id: string; title: string; composition: string }
+
+export type Slide = {
+  heading: string
+  body: string // markdown, with light [n] citations
+  illustration: IllustrationSpec | null
+}
+
 export type TutorAnswer = {
-  answer: string
+  slides: Slide[]
   sources: SearchHit[]
   engineId: string
 }
 
-export type IllustrationSpec = { id: string; title: string; composition: string }
-export type IllustrationImage = { id: string; title: string; dataUrl: string }
-export type IllustrateRequest = { question: string; answer: string }
+/** Either a generated image (dataUrl) or a reason it couldn't be made. */
+export type IllustrationImage = {
+  id: string
+  title: string
+  dataUrl?: string
+  error?: string
+  /** True when generation failed because the image quota/credits are exhausted. */
+  quota?: boolean
+}

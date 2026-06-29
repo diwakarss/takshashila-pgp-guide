@@ -5,8 +5,7 @@ import { studyBrain } from './services/studyBrain'
 import { runTutor } from './services/tutor'
 import { agentCliEngine } from './engine/agentCli'
 import { imageEngine } from './illustrate/imageEngine'
-import { planIllustrations } from './illustrate/planner'
-import type { IllustrationSpec } from '../shared/ipc'
+import type { IllustrationImage, IllustrationSpec } from '../shared/ipc'
 
 // ┌─────────────────────────────────────────────────────────────────────┐
 // │ Main process. Owns the native window + privileged work (brain, fs,   │
@@ -102,15 +101,16 @@ function registerIpc(): void {
 
   ipcMain.handle(IPC.illustrationAvailable, () => imageEngine.isAvailable())
 
-  ipcMain.handle(IPC.illustrationPlan, (_e, req: { question: string; answer: string }) =>
-    imageEngine.isAvailable() ? planIllustrations(req.question, req.answer, agentCliEngine) : []
-  )
-
-  ipcMain.handle(IPC.illustrationGenerate, async (_e, spec: IllustrationSpec) => ({
-    id: spec.id,
-    title: spec.title,
-    dataUrl: await imageEngine.generate(spec.title, spec.composition)
-  }))
+  ipcMain.handle(IPC.illustrationGenerate, async (_e, spec: IllustrationSpec): Promise<IllustrationImage> => {
+    try {
+      const dataUrl = await imageEngine.generate(spec.title, spec.composition)
+      return { id: spec.id, title: spec.title, dataUrl }
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e)
+      const quota = /429|quota|billing|insufficient|exceeded/i.test(msg)
+      return { id: spec.id, title: spec.title, error: msg, quota }
+    }
+  })
 }
 
 // Surface crashes that would otherwise quit the app silently.
@@ -142,14 +142,20 @@ app.whenReady().then(() => {
               engine: agentCliEngine
             }
           )
-          console.log('[pgp] dev auto-ask answer:', ans.answer.slice(0, 200))
-          console.log('[pgp] dev auto-ask sources:', ans.sources.map((s) => s.title ?? s.slug).join(' | '))
+          console.log(
+            '[pgp] dev slides:',
+            JSON.stringify(ans.slides.map((s) => ({ h: s.heading, ill: s.illustration?.title ?? null })))
+          )
+          console.log('[pgp] dev sources:', ans.sources.map((s) => s.title ?? s.slug).join(' | '))
           if (process.env['PGP_DEV_ILLUS'] && imageEngine.isAvailable()) {
-            const specs = await planIllustrations(process.env['PGP_DEV_AUTOASK']!, ans.answer, agentCliEngine)
-            console.log('[pgp] dev illustration specs:', JSON.stringify(specs.map((s) => s.title)))
-            if (specs[0]) {
-              const img = await imageEngine.generate(specs[0].title, specs[0].composition)
-              console.log(`[pgp] dev illustration[0] "${specs[0].title}" generated, dataUrl ${img.length} chars`)
+            for (const slide of ans.slides) {
+              if (!slide.illustration) continue
+              try {
+                const img = await imageEngine.generate(slide.illustration.title, slide.illustration.composition)
+                console.log(`[pgp] dev illustration OK "${slide.illustration.title}" (${img.length} chars)`)
+              } catch (err) {
+                console.error(`[pgp] dev illustration FAILED "${slide.illustration.title}":`, err)
+              }
             }
           }
         }
