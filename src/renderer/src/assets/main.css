@@ -304,34 +304,47 @@ h2 {
   transition: width 120ms ease;
 }
 
-/* ── course picker ──────────────────────────────────────── */
-.course-picker {
-  display: flex;
+/* ── course selector (scales to many courses) ───────────── */
+.ask-bar {
+  margin: 0 0 12px;
+}
+.course-select {
+  display: inline-flex;
+  align-items: center;
   gap: 8px;
-  flex-wrap: wrap;
-  margin: 0 0 14px;
 }
-.course-tab {
-  font: inherit;
+.course-select-label {
   font-size: 13px;
-  padding: 6px 12px;
-  border-radius: 999px;
-  border: 1px solid var(--hairline);
-  background: var(--surface);
   color: var(--muted);
-  cursor: pointer;
 }
-.course-tab:hover {
-  border-color: var(--tutor);
-}
-.course-tab.active {
+.course-select select {
+  font: inherit;
+  font-size: 14px;
+  height: 34px;
+  padding: 0 10px;
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius-control);
+  background: var(--surface);
   color: var(--ink);
-  border-color: var(--tutor);
-  background: color-mix(in srgb, var(--tutor) 8%, transparent);
+  cursor: pointer;
+  max-width: 360px;
 }
-.course-code {
-  font-weight: 500;
+.course-select select:focus {
+  outline: 2px solid color-mix(in srgb, var(--tutor) 50%, transparent);
+  outline-offset: 1px;
+}
+.source-num {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--tutor) 12%, transparent);
   color: var(--tutor);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
 }
 
 /* ── tutor answer + sources ─────────────────────────────── */
@@ -371,13 +384,13 @@ h2 {
 }
 .source-line {
   display: flex;
-  justify-content: space-between;
-  align-items: baseline;
-  gap: 10px;
+  align-items: center;
+  gap: 8px;
   font-size: 14px;
 }
 .source-line-title {
   color: var(--ink);
+  flex: 1;
 }
 .answer-text {
   font-family: 'Source Serif Pro', Georgia, serif;

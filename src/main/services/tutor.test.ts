@@ -23,13 +23,18 @@ const fakeEngine = (reply: string): Engine => ({
 })
 
 describe('buildTutorPrompt', () => {
-  it('instructs teaching, no inline citation numbers, and names the course', () => {
-    const msgs = buildTutorPrompt('why do bans fail?', [hit('micro-1', 'incentives matter', 'Microeconomics 1')], 'Microeconomics-I')
+  it('instructs teaching, numbered lessons, light [n] citations, and names the course', () => {
+    const msgs = buildTutorPrompt(
+      'why do bans fail?',
+      [hit('micro-1', 'incentives matter', 'Microeconomics 1'), hit('micro-2', 'state capacity', 'Microeconomics 2')],
+      'Microeconomics-I'
+    )
     expect(msgs[0].role).toBe('system')
     expect(msgs[0].content).toMatch(/TEACH/)
-    expect(msgs[0].content).toMatch(/do NOT put bracketed citation numbers/i)
+    expect(msgs[0].content).toMatch(/cite .*\[1\] or \[2\]/i)
     expect(msgs[0].content).toContain('Microeconomics-I')
-    expect(msgs[1].content).toContain('From "Microeconomics 1"')
+    expect(msgs[1].content).toContain('[1] "Microeconomics 1"')
+    expect(msgs[1].content).toContain('[2] "Microeconomics 2"')
     expect(msgs[1].content).toContain("Student's question: why do bans fail?")
   })
 })
@@ -48,7 +53,6 @@ describe('runTutor', () => {
       }
     )
     expect(scoped).toBe('PP231')
-    expect(result.answer).not.toMatch(/\[1\]/) // no inline citation clutter
     expect(result.sources).toHaveLength(1)
     expect(result.engineId).toBe('fake')
   })
