@@ -4,7 +4,8 @@
 // 16:9) — not the original Chinese-text runtime. Every generated illustration
 // prepends this so the planner only supplies the concept-specific composition.
 export const STYLE_DNA = `One standalone 16:9 horizontal hand-drawn CONCEPT ILLUSTRATION for a public-policy study app.
-Visual DNA: pure WHITE background, minimalist BLACK hand-drawn slightly-wobbly pen line art, LOTS of empty white space (at least 35% blank), clean absurd product-sketch feeling. Absolutely NO gradients, NO shadows, NO paper texture, NO PPT infographic, NO cute mascot, NO children's illustration, NO realistic UI, NO photo-real.
+Visual DNA: pure WHITE background, minimalist BLACK hand-drawn line art with THIN, delicate pen lines (fine-liner feel) — NOT thick brush or marker strokes. LOTS of empty white space (at least 35% blank), clean absurd product-sketch feeling. Absolutely NO gradients, NO shadows, NO paper texture, NO PPT infographic, NO cute mascot, NO children's illustration, NO realistic UI, NO photo-real.
+Text: keep it MINIMAL — at most 4-5 short labels, big clear hand-printed letters, spelled correctly.
 Recurring character 'the analyst': a small deadpan stick figure drawn as a WHITE (unfilled) body with a clean thin black outline, small dot eyes, thin legs, serious not cute. The analyst PERFORMS the core idea, not decoration.
 FIGURE FILL RULE (strict): EVERY human figure is WHITE-fill (unfilled, black outline only). The ONLY exception is a figure that specifically depicts a wrongdoer — a rule-breaker, exploiter, corrupt actor, or threat — which may be SOLID BLACK. Never fill a figure black to mean "the other option", "the past", "given up", or just for contrast. If in doubt, white-fill.
 Context: this is an INDIAN public-policy course. Use Indian institutions and examples where a real-world referent is needed (Parliament / Lok Sabha, RBI, GST, a ration shop, PLI, a state government) — never US ones (no Congress, no Congressional Committee, no dollar sign).

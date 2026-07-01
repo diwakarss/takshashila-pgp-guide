@@ -12,7 +12,9 @@ import { buildIllustrationBrief } from './style'
 // so a repeated brief is free; the concept library keys reuse above this.
 
 const MODEL = process.env['PGP_IMAGE_MODEL'] ?? 'gpt-image-1'
-const QUALITY = process.env['PGP_IMAGE_QUALITY'] ?? 'low'
+// 'medium' is the sweet spot for our line art: correct text + clear composition
+// at ~$0.06/image (~4x cheaper than high). Override via PGP_IMAGE_QUALITY.
+const QUALITY = process.env['PGP_IMAGE_QUALITY'] ?? 'medium'
 const SIZE = process.env['PGP_IMAGE_SIZE'] ?? '1536x1024' // 16:9 landscape
 
 function apiKey(): string | null {
