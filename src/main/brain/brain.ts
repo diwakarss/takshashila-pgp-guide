@@ -155,7 +155,7 @@ export class Brain {
     queryEmbedding: number[],
     opts: { threshold?: number; courseCode?: string } = {}
   ): Promise<ConceptMatch | null> {
-    const threshold = opts.threshold ?? 0.85
+    const threshold = opts.threshold ?? 0.9
     const qlit = toVectorLiteral(queryEmbedding)
     const res = await this.db.query<{ key: string; title: string; image_file: string; distance: number }>(
       `SELECT key, title, image_file, (embedding <=> $1) AS distance
