@@ -1,5 +1,6 @@
 import { app, shell, BrowserWindow, ipcMain } from 'electron'
 import { join } from 'path'
+import { copyFileSync, mkdirSync, writeFileSync } from 'node:fs'
 import { IPC, type AppInfo } from '../shared/ipc'
 import { studyBrain } from './services/studyBrain'
 import { agentCliEngine } from './engine/agentCli'
@@ -12,6 +13,28 @@ import type { AskRequest, IllustrationImage, IllustrationSpec } from '../shared/
 // change; PGP_DEV_LIB_MAX=N concepts/course). Reuses resolveIllustration, so it
 // dedupes and only draws what's new.
 async function buildLibrary(): Promise<void> {
+  // Back up the current library (named by concept + a manifest) before any clear,
+  // so good images can be reinstated by hand later.
+  if (process.env['PGP_DEV_BACKUP']) {
+    const concepts = await studyBrain.listConcepts()
+    const srcDir = studyBrain.illustrationsDir()
+    const backupDir = join(app.getPath('userData'), `illustrations-backup-${Date.now()}`)
+    mkdirSync(backupDir, { recursive: true })
+    const manifest: { title: string; course: string | null; file: string; original: string }[] = []
+    for (const c of concepts) {
+      const safe = c.title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 50)
+      const dest = `${c.courseCode ?? 'x'}-${safe}.png`
+      try {
+        copyFileSync(join(srcDir, c.imageFile), join(backupDir, dest))
+        manifest.push({ title: c.title, course: c.courseCode, file: dest, original: c.imageFile })
+      } catch {
+        /* skip missing files */
+      }
+    }
+    writeFileSync(join(backupDir, 'manifest.json'), JSON.stringify(manifest, null, 2))
+    console.log(`[lib] backed up ${manifest.length} images to ${backupDir}`)
+  }
+
   if (process.env['PGP_DEV_CLEAR_LIBRARY']) {
     await studyBrain.clearLibrary()
     console.log('[lib] cleared existing library')

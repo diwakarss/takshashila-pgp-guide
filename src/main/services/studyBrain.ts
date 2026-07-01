@@ -203,6 +203,15 @@ class StudyBrainService {
     await brain.clearConcepts()
   }
 
+  async listConcepts(): Promise<{ key: string; title: string; courseCode: string | null; imageFile: string }[]> {
+    const brain = await this.open()
+    return brain.listConcepts()
+  }
+
+  illustrationsDir(): string {
+    return join(app.getPath('userData'), 'illustrations')
+  }
+
   async lessonTitles(courseCode: string): Promise<string[]> {
     const brain = await this.open()
     return brain.courseLessonTitles(courseCode)

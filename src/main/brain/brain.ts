@@ -202,6 +202,14 @@ export class Brain {
     await this.db.query(`DELETE FROM concepts`)
   }
 
+  /** List concepts (metadata only) — used to back up the library before a regen. */
+  async listConcepts(): Promise<{ key: string; title: string; courseCode: string | null; imageFile: string }[]> {
+    const r = await this.db.query<{ key: string; title: string; course_code: string | null; image_file: string }>(
+      `SELECT key, title, course_code, image_file FROM concepts ORDER BY course_code, title`
+    )
+    return r.rows.map((c) => ({ key: c.key, title: c.title, courseCode: c.course_code, imageFile: c.image_file }))
+  }
+
   /** Distinct lesson titles for a course — input to concept extraction. */
   async courseLessonTitles(courseCode: string): Promise<string[]> {
     const r = await this.db.query<{ title: string }>(

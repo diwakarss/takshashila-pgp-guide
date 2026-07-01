@@ -31,6 +31,7 @@ export function Tutor(props: {
   const [thread, setThread] = useState<ThreadDetail | null>(null)
   const [q, setQ] = useState('')
   const [busy, setBusy] = useState(false)
+  const [pending, setPending] = useState<string | null>(null) // question shown while its answer loads
   const [error, setError] = useState<string | null>(null)
   const [illus, setIllus] = useState<Record<string, IllusEntry>>({})
   const startedIllus = useRef<Set<string>>(new Set())
@@ -54,7 +55,7 @@ export function Tutor(props: {
   useEffect(() => {
     const el = scrollRef.current
     if (el) el.scrollTop = el.scrollHeight
-  }, [thread, busy])
+  }, [thread, pending])
 
   const engineReady = engine?.available ?? false
   const courseCode = thread?.courseCode ?? course ?? ''
@@ -78,6 +79,7 @@ export function Tutor(props: {
   const ask = async (question: string): Promise<void> => {
     if (!question.trim() || busy) return
     setBusy(true)
+    setPending(question.trim())
     setError(null)
     setQ('')
     try {
@@ -94,6 +96,7 @@ export function Tutor(props: {
       setError(e instanceof Error ? e.message : String(e))
     } finally {
       setBusy(false)
+      setPending(null)
     }
   }
 
@@ -153,7 +156,14 @@ export function Tutor(props: {
           <TurnView key={turn.id} turn={turn} illus={illus} onNeedIllustration={needIllustration} />
         ))}
 
-        {busy && <p className="muted small thinking">Teaching…</p>}
+        {pending && (
+          <div className="turn">
+            <div className="turn-q">{pending}</div>
+            <div className="turn-a">
+              <p className="muted small thinking">Teaching…</p>
+            </div>
+          </div>
+        )}
         {error && <p className="banner danger">Couldn’t answer: {error}</p>}
 
         {lastFollowups.length > 0 && !busy && (
