@@ -1,25 +1,28 @@
-import { spawn } from 'node:child_process'
-import { existsSync, mkdirSync, readFileSync } from 'node:fs'
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { homedir } from 'node:os'
 import { createHash } from 'node:crypto'
 import { app } from 'electron'
 import { buildIllustrationBrief } from './style'
 
-// Builder image engine: generates a concept illustration by shelling the gstack
-// `design` binary (the same generator behind the design mockups). This is the
-// BUILDER path — students on a text-only LLM won't have it; a real product path
-// (OpenAI images via the API-key engine, or a shipped cache) is a later task.
-//
-// Generated images are cached by a hash of the full brief, so a repeated
-// concept is returned instantly instead of regenerated (~40s).
+// Direct OpenAI image generation (gpt-image-1) at LOW quality — our hand-drawn
+// line art needs no photorealism, and low is ~15x cheaper than high (~$0.013 vs
+// ~$0.20 for 16:9). One API request per image (vs the design tool's high-quality
+// + vision-QA double call). Generated images are cached by a hash of the brief
+// so a repeated brief is free; the concept library keys reuse above this.
 
-function resolveDesignBin(): string | null {
-  const candidates = [
-    join(process.cwd(), '.claude/skills/gstack/design/dist/design'),
-    join(homedir(), '.claude/skills/gstack/design/dist/design')
-  ]
-  return candidates.find((p) => existsSync(p)) ?? null
+const MODEL = process.env['PGP_IMAGE_MODEL'] ?? 'gpt-image-1'
+const QUALITY = process.env['PGP_IMAGE_QUALITY'] ?? 'low'
+const SIZE = process.env['PGP_IMAGE_SIZE'] ?? '1536x1024' // 16:9 landscape
+
+function apiKey(): string | null {
+  if (process.env['PGP_OPENAI_KEY']) return process.env['PGP_OPENAI_KEY']
+  try {
+    const cfg = JSON.parse(readFileSync(join(homedir(), '.gstack', 'openai.json'), 'utf8')) as { api_key?: string }
+    return cfg.api_key ?? null
+  } catch {
+    return null
+  }
 }
 
 function cacheDir(): string {
@@ -28,39 +31,50 @@ function cacheDir(): string {
   return dir
 }
 
-function run(bin: string, args: string[], timeoutMs: number): Promise<void> {
-  return new Promise((resolve, reject) => {
-    const child = spawn(bin, args, { stdio: ['ignore', 'ignore', 'pipe'] })
-    let err = ''
-    const timer = setTimeout(() => {
-      child.kill('SIGKILL')
-      reject(new Error(`image generation timed out after ${timeoutMs}ms`))
-    }, timeoutMs)
-    child.stderr.on('data', (d) => (err += d))
-    child.on('error', reject)
-    child.on('close', (code) => {
-      clearTimeout(timer)
-      code === 0 ? resolve() : reject(new Error(err.trim() || `design exited ${code}`))
-    })
-  })
+function toDataUrl(path: string): string {
+  return `data:image/png;base64,${readFileSync(path).toString('base64')}`
 }
 
-export class DesignBinaryImageEngine {
+async function callOpenAI(key: string, prompt: string): Promise<Buffer> {
+  const ctrl = new AbortController()
+  const timer = setTimeout(() => ctrl.abort(), 150_000)
+  try {
+    const res = await fetch('https://api.openai.com/v1/images/generations', {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${key}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ model: MODEL, prompt, size: SIZE, quality: QUALITY, n: 1 }),
+      signal: ctrl.signal
+    })
+    if (!res.ok) {
+      const body = await res.text()
+      throw new Error(`OpenAI images ${res.status}: ${body.slice(0, 300)}`)
+    }
+    const json = (await res.json()) as { data?: { b64_json?: string }[] }
+    const b64 = json.data?.[0]?.b64_json
+    if (!b64) throw new Error('OpenAI images: no image in response')
+    return Buffer.from(b64, 'base64')
+  } finally {
+    clearTimeout(timer)
+  }
+}
+
+export class OpenAiImageEngine {
   isAvailable(): boolean {
-    return resolveDesignBin() !== null
+    return apiKey() !== null
   }
 
   /** Generate (or return cached) a PNG for a concept; resolves to its data URL
-   *  and the cache filename (recorded in the concept library for reuse). */
+   *  and cache filename (recorded in the concept library for reuse). */
   async generate(title: string, composition: string): Promise<{ dataUrl: string; file: string }> {
-    const bin = resolveDesignBin()
-    if (!bin) throw new Error('image generator not available on this machine')
+    const key = apiKey()
+    if (!key) throw new Error('no OpenAI API key configured')
     const brief = buildIllustrationBrief(title, composition)
-    const key = createHash('sha256').update(brief).digest('hex').slice(0, 16)
-    const file = `${key}.png`
+    const hash = createHash('sha256').update(`${MODEL}:${QUALITY}:${SIZE}:${brief}`).digest('hex').slice(0, 16)
+    const file = `${hash}.png`
     const out = join(cacheDir(), file)
     if (!existsSync(out)) {
-      await run(bin, ['generate', '--brief', brief, '--output', out], 150_000)
+      const png = await callOpenAI(key, brief)
+      writeFileSync(out, png)
     }
     return { dataUrl: toDataUrl(out), file }
   }
@@ -72,8 +86,4 @@ export class DesignBinaryImageEngine {
   }
 }
 
-function toDataUrl(path: string): string {
-  return `data:image/png;base64,${readFileSync(path).toString('base64')}`
-}
-
-export const imageEngine = new DesignBinaryImageEngine()
+export const imageEngine = new OpenAiImageEngine()
