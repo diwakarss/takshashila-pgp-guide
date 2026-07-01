@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { BookOpen, Pencil, ChevronLeft, ChevronRight } from 'lucide-react'
 import ReactMarkdown from 'react-markdown'
+import remarkGfm from 'remark-gfm'
 import type {
   CourseSummary,
   EngineStatus,
@@ -211,7 +212,7 @@ function TurnView(props: {
               <Illustration spec={cur.illustration} entry={illus[`${turn.id}:${cur.illustration.id}`]} />
             )}
             <div className="answer-md">
-              <ReactMarkdown>{toSuperscriptCitations(cur.body)}</ReactMarkdown>
+              <Md>{toSuperscriptCitations(cur.body)}</Md>
             </div>
             {slides.length > 1 && (
               <nav className="slide-nav">
@@ -229,7 +230,7 @@ function TurnView(props: {
           </div>
         ) : (
           <div className="answer-md">
-            <ReactMarkdown>{toSuperscriptCitations(a.text)}</ReactMarkdown>
+            <Md>{toSuperscriptCitations(a.text)}</Md>
           </div>
         )}
         {a.sources.length > 0 && <Sources sources={a.sources} />}
@@ -279,6 +280,12 @@ function Sources(props: { sources: TutorReply['sources'] }): JSX.Element {
       </ol>
     </div>
   )
+}
+
+// Markdown with GitHub-flavored extensions (tables, strikethrough, task lists…)
+// so a table in an answer renders as a real table, not raw pipes.
+function Md(props: { children: string }): JSX.Element {
+  return <ReactMarkdown remarkPlugins={[remarkGfm]}>{props.children}</ReactMarkdown>
 }
 
 const SUP = ['⁰', '¹', '²', '³', '⁴', '⁵', '⁶', '⁷', '⁸', '⁹']

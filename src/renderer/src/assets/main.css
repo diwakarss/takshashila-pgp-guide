@@ -616,6 +616,38 @@ h2 {
   font-size: 16px;
   margin: 14px 0 6px;
 }
+.answer-md table {
+  border-collapse: collapse;
+  width: 100%;
+  margin: 12px 0;
+  font-family: Inter, system-ui, sans-serif;
+  font-size: 14px;
+}
+.answer-md th,
+.answer-md td {
+  border: 1px solid var(--hairline);
+  padding: 7px 10px;
+  text-align: left;
+  vertical-align: top;
+}
+.answer-md thead th {
+  background: color-mix(in srgb, var(--brand) 6%, transparent);
+  font-weight: 500;
+}
+.answer-md code {
+  background: color-mix(in srgb, var(--ink) 6%, transparent);
+  padding: 1px 5px;
+  border-radius: 4px;
+}
+.answer-md blockquote {
+  margin: 10px 0;
+  padding-left: 12px;
+  border-left: 3px solid var(--hairline);
+  color: var(--muted);
+}
+.answer-md a {
+  color: var(--tutor);
+}
 .source-list {
   list-style: none;
   margin: 8px 0 0;
