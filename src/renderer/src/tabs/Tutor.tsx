@@ -1,12 +1,11 @@
 import { useEffect, useRef, useState } from 'react'
-import { BookOpen, Pencil } from 'lucide-react'
+import { BookOpen, Pencil, ChevronLeft, ChevronRight } from 'lucide-react'
 import ReactMarkdown from 'react-markdown'
 import type {
   CourseSummary,
   EngineStatus,
   IllustrationImage,
   IllustrationSpec,
-  Slide,
   ThreadDetail,
   Turn,
   TutorReply
@@ -14,9 +13,9 @@ import type {
 
 type IllusEntry = { status: 'drawing' | 'done' | 'error'; dataUrl?: string; error?: string; quota?: boolean }
 
-// Tutor — a threaded conversation rendered like a chat: every turn (question +
-// reply) stacked and scrollable, with the follow-up box docked at the bottom.
-// Concept replies render their slides inline; simple replies render as text.
+// Tutor — a threaded conversation. The whole thread scrolls as one (turns +
+// follow-ups). A concept reply is a paginated slide deck (Back/Next); a simple
+// reply is plain text. The follow-up input stays docked for typing.
 export function Tutor(props: {
   ready: boolean
   engine: EngineStatus | null
@@ -40,7 +39,6 @@ export function Tutor(props: {
     if (ready) void window.pgp.courses().then(setCourses)
   }, [ready])
 
-  // Load (or clear) the open thread.
   useEffect(() => {
     if (openThreadId == null) {
       setThread(null)
@@ -52,7 +50,6 @@ export function Tutor(props: {
     })
   }, [openThreadId])
 
-  // Keep the latest turn in view.
   useEffect(() => {
     const el = scrollRef.current
     if (el) el.scrollTop = el.scrollHeight
@@ -61,8 +58,6 @@ export function Tutor(props: {
   const engineReady = engine?.available ?? false
   const courseCode = thread?.courseCode ?? course ?? ''
 
-  // Resolve a slide's illustration once (library hit = instant/free). The ref
-  // dedupes so a single image is never generated twice (e.g. StrictMode).
   const needIllustration = (turnId: string, spec: IllustrationSpec): void => {
     const key = `${turnId}:${spec.id}`
     if (startedIllus.current.has(key)) return
@@ -122,10 +117,7 @@ export function Tutor(props: {
     <div className="tutor">
       <div className="tutor-bar">
         {thread ? (
-          <span className="course-locked">
-            {courseName}
-            {thread.courseCode ? '' : ''}
-          </span>
+          <span className="course-locked">{courseName}</span>
         ) : (
           <label className="course-select">
             <span className="course-select-label">Course</span>
@@ -162,17 +154,17 @@ export function Tutor(props: {
 
         {busy && <p className="muted small thinking">Teaching…</p>}
         {error && <p className="banner danger">Couldn’t answer: {error}</p>}
-      </div>
 
-      {lastFollowups.length > 0 && !busy && (
-        <div className="followups">
-          {lastFollowups.map((f) => (
-            <button key={f} className="chip" onClick={() => ask(f)}>
-              {f}
-            </button>
-          ))}
-        </div>
-      )}
+        {lastFollowups.length > 0 && !busy && (
+          <div className="followups">
+            {lastFollowups.map((f) => (
+              <button key={f} className="chip" onClick={() => ask(f)}>
+                {f}
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
 
       <div className="ask-row ask-dock">
         <input
@@ -198,14 +190,43 @@ function TurnView(props: {
 }): JSX.Element {
   const { turn, illus, onNeedIllustration } = props
   const a = turn.answer
+  const slides = a.kind === 'slides' ? a.slides : []
+  const [idx, setIdx] = useState(0)
+  const cur = slides[idx]
+
+  // Resolve only the current slide's illustration (lazy — no cost for slides you don't reach).
+  useEffect(() => {
+    if (cur?.illustration) onNeedIllustration(turn.id, cur.illustration)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [turn.id, idx, cur?.illustration?.id])
+
   return (
     <div className="turn">
       <div className="turn-q">{turn.question}</div>
       <div className="turn-a">
-        {a.kind === 'slides' ? (
-          a.slides.map((s, i) => (
-            <SlideBlock key={i} turnId={turn.id} slide={s} illus={illus} onNeed={onNeedIllustration} />
-          ))
+        {a.kind === 'slides' && cur ? (
+          <div className="slide-card">
+            <h3 className="slide-heading">{cur.heading}</h3>
+            {cur.illustration && (
+              <Illustration spec={cur.illustration} entry={illus[`${turn.id}:${cur.illustration.id}`]} />
+            )}
+            <div className="answer-md">
+              <ReactMarkdown>{toSuperscriptCitations(cur.body)}</ReactMarkdown>
+            </div>
+            {slides.length > 1 && (
+              <nav className="slide-nav">
+                <button className="btn" disabled={idx === 0} onClick={() => setIdx((i) => i - 1)}>
+                  <ChevronLeft size={16} /> Back
+                </button>
+                <span className="slide-count">
+                  {idx + 1} / {slides.length}
+                </span>
+                <button className="btn primary" disabled={idx >= slides.length - 1} onClick={() => setIdx((i) => i + 1)}>
+                  Next <ChevronRight size={16} />
+                </button>
+              </nav>
+            )}
+          </div>
         ) : (
           <div className="answer-md">
             <ReactMarkdown>{toSuperscriptCitations(a.text)}</ReactMarkdown>
@@ -214,30 +235,6 @@ function TurnView(props: {
         {a.sources.length > 0 && <Sources sources={a.sources} />}
       </div>
     </div>
-  )
-}
-
-function SlideBlock(props: {
-  turnId: string
-  slide: Slide
-  illus: Record<string, IllusEntry>
-  onNeed: (turnId: string, spec: IllustrationSpec) => void
-}): JSX.Element {
-  const { turnId, slide, illus, onNeed } = props
-  useEffect(() => {
-    if (slide.illustration) onNeed(turnId, slide.illustration)
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [turnId, slide.illustration?.id])
-
-  const entry = slide.illustration ? illus[`${turnId}:${slide.illustration.id}`] : undefined
-  return (
-    <section className="slide-block">
-      <h3 className="slide-heading">{slide.heading}</h3>
-      {slide.illustration && <Illustration spec={slide.illustration} entry={entry} />}
-      <div className="answer-md">
-        <ReactMarkdown>{toSuperscriptCitations(slide.body)}</ReactMarkdown>
-      </div>
-    </section>
   )
 }
 

@@ -368,19 +368,21 @@ h2 {
 .new-conv {
   display: flex;
   align-items: center;
-  gap: 8px;
+  justify-content: center;
+  gap: 6px;
   width: 100%;
+  white-space: nowrap;
   font: inherit;
   font-size: 13px;
-  padding: 7px 10px;
-  border: 1px solid var(--hairline);
+  padding: 8px 10px;
+  border: 1px solid color-mix(in srgb, var(--brand) 35%, transparent);
   border-radius: var(--radius-control);
-  background: var(--surface);
-  color: var(--ink);
+  background: color-mix(in srgb, var(--brand) 10%, var(--surface));
+  color: var(--brand);
   cursor: pointer;
 }
 .new-conv:hover {
-  border-color: var(--tutor);
+  background: color-mix(in srgb, var(--brand) 16%, var(--surface));
 }
 .recents-label {
   font-size: 11px;
@@ -475,19 +477,23 @@ h2 {
   flex-direction: column;
   gap: 14px;
 }
-.slide-block {
-  border-left: 2px solid var(--hairline);
-  padding-left: 14px;
+.slide-card {
+  background: var(--surface);
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius-card);
+  padding: 18px 20px;
+}
+.slide-card .slide-nav {
+  margin-bottom: 0;
 }
 .thinking {
   font-style: italic;
 }
+/* Follow-ups now flow inside the scroll (not pinned), after the last answer. */
 .followups {
-  flex: 0 0 auto;
   display: flex;
   gap: 8px;
   flex-wrap: wrap;
-  padding: 10px 2px 0;
 }
 .ask-dock {
   flex: 0 0 auto;
