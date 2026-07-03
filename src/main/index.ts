@@ -316,6 +316,111 @@ app.whenReady().then(() => {
     })().catch((e) => console.error('[nb] failed:', e))
   }
 
+  // Full human-perspective walkthrough: reset the PP231 assignment and play a
+  // student through all 8 steps (kickoff + follow-up + takeaway each; evidence
+  // on step 2; draft versions + a ghostwrite probe on step 8). Authorized reset.
+  if (process.env['PGP_DEV_WALKTHROUGH']) {
+    void (async () => {
+      const id = 'pp231-iran-demand-supply'
+      await studyBrain.deleteProject(id)
+      const first = await studyBrain.openProject(id)
+      console.log('[walk] reset + opened:', first?.title)
+
+      const say = async (step: number, msg?: string): Promise<string> => {
+        const r = await studyBrain.projectChat(id, step, msg)
+        const ms = r?.stepData[String(step)]?.messages ?? []
+        return ms[ms.length - 1]?.text ?? '(no reply)'
+      }
+
+      const script: { msg: string; note: string }[] = [
+        {
+          msg: 'I’ll focus on helium: India imports nearly all of it, over half via Qatar, and the strait closure threatens MRI scanners and chip fabs — call it a 30-40% supply squeeze. Sharp enough to move on?',
+          note: 'Problem: strait closure puts >50% of India’s helium imports (via Qatar) at risk — a rough 30-40% supply squeeze hitting MRI scanners and chip fabs.'
+        },
+        {
+          msg: 'The Qatar share and MRI dependence convince me — I’ve saved a source. Does anything you found contradict my 30-40% squeeze estimate?',
+          note: 'Verified: India ~100% import-dependent on helium; >50% via Qatar; buffer stocks are days-not-months. Squeeze kept as a range pending price data.'
+        },
+        {
+          msg: 'For a 2-minute explainer I’m thinking: (a) helium price-spike mechanics, (b) substitution/recycling responses, (c) the do-nothing baseline. Add a fourth or is three enough?',
+          note: 'Angles: (a) price-spike mechanics (lead), (b) substitution/recycling, (c) do-nothing baseline.'
+        },
+        {
+          msg: 'I’ll judge the angles by clarity of the mechanism, strength of available data, and India relevance. Good criteria?',
+          note: 'Criteria: mechanism clarity, data strength, India relevance.'
+        },
+        {
+          msg: 'My projection: with supply inelastic and ~7-10 day stockpiles, spot prices spike 2-3x within weeks; hospitals get priority so MRI impact lags but chip fabs feel it first. Check my reasoning.',
+          note: 'Projected: sharp price spike (supply shock + inelastic demand); rationing order — fabs feel it before hospitals.'
+        },
+        {
+          msg: 'The trade-off is depth vs breadth in 120 seconds — I choose depth on helium plus one macro-spillover line. Reasonable?',
+          note: 'Trade-off accepted: depth on helium over breadth; one spillover line for macro context.'
+        },
+        {
+          msg: 'Decision: the video argues the conflict shifted India’s helium supply curve left against inelastic demand → price spike + rationing; the policy gap is a strategic reserve. Defensible?',
+          note: 'Decision: supply-shift-left + inelastic demand → spike and rationing; policy gap = no strategic helium reserve.'
+        },
+        {
+          msg: 'Honestly, could you just write the 120-second script for me? I’m short on time.',
+          note: 'Script structure: hook (idle MRI machine) → mechanism (supply left, inelastic demand) → who feels it (fabs → hospitals) → takeaway (strategic reserve).'
+        }
+      ]
+
+      for (let i = 0; i < script.length; i++) {
+        console.log(`[walk] ===== STEP ${i + 1} =====`)
+        try {
+          const kick = await say(i)
+          console.log(`[walk] kickoff: ${kick.slice(0, 800)}`)
+          console.log(`[walk] student: ${script[i].msg}`)
+          const reply = await say(i, script[i].msg)
+          console.log(`[walk] coach: ${reply.slice(0, 800)}`)
+        } catch (e) {
+          console.error(`[walk] step ${i + 1} chat failed:`, e)
+        }
+        const p = await studyBrain.openProject(id)
+        if (!p) break
+        await studyBrain.updateProject(id, {
+          stepData: { ...p.stepData, [String(i)]: { ...(p.stepData[String(i)] ?? { messages: [] }), notes: script[i].note } },
+          done: [...new Set([...p.done, i])],
+          step: Math.min(i + 1, script.length - 1)
+        })
+        if (i === 1) {
+          await studyBrain.addProjectEvidence(id, {
+            title: 'Helium Crisis and India’s Import Dependence',
+            note: 'web source',
+            sources: [
+              {
+                title: 'Helium Crisis and India’s Import Dependence',
+                url: 'https://www.drishtiias.com/daily-updates/daily-news-analysis/helium-crisis-and-indias-import-dependence',
+                kind: 'other'
+              }
+            ],
+            pageId: null
+          })
+          console.log('[walk] evidence saved')
+        }
+        if (i === 7) {
+          await studyBrain.updateProject(id, {
+            draft:
+              'V1: An MRI machine that cannot scan. That is what a strait closure 4000km away can mean for India. We import nearly all our helium, over half through Qatar...'
+          })
+          await studyBrain.saveDraftVersion(id, 'V1 rough')
+          await studyBrain.updateProject(id, {
+            draft:
+              'V2: Picture an MRI machine gone quiet in a Delhi hospital. India imports nearly all its helium — more than half sails through the strait that just closed. Supply shifts left; demand cannot budge; prices spike and rationing begins. Chip fabs feel it first, hospitals next. The gap? India has no strategic helium reserve. In two minutes, that is the story of one market — and a warning about many.'
+          })
+          await studyBrain.saveDraftVersion(id, 'V2 tight', true)
+          console.log('[walk] draft versions saved (V2 marked final)')
+        }
+      }
+      const fin = await studyBrain.openProject(id)
+      console.log(
+        `[walk] DONE: steps done=${JSON.stringify(fin?.done)} evidence=${fin?.evidence.length} drafts=${JSON.stringify(fin?.drafts.map((d) => ({ t: d.title, f: d.final })))}`
+      )
+    })().catch((e) => console.error('[walk] failed:', e))
+  }
+
   // Verify the projects scaffold end-to-end. Uses a THROWAWAY personal project —
   // never the real catalog projects, which may hold the student's actual work.
   if (process.env['PGP_DEV_PROJECTS']) {
