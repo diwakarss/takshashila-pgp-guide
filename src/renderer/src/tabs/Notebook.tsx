@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { NotebookPen, Plus, Search, Trash2, ExternalLink } from 'lucide-react'
+import { Md } from '../components/Markdown'
 import type { NotebookPage, NotebookPageSummary, NoteSource } from '../../../shared/ipc'
 
 // Notebook — the connective tissue between Research and Projects. Titled pages of
@@ -153,8 +154,8 @@ export function Notebook(props: { version: number }): JSX.Element {
               <div className="nb-snippets">
                 <div className="recents-label">Captured from research</div>
                 {page.snippets.map((s) => (
-                  <blockquote key={s.id} className="nb-snippet">
-                    <p>{s.text}</p>
+                  <blockquote key={s.id} className="nb-snippet answer-md">
+                    <Md>{s.text}</Md>
                     <footer className="muted small">
                       {s.from}
                       {s.sources.length > 0 && ` · ${s.sources.length} source${s.sources.length === 1 ? '' : 's'}`}

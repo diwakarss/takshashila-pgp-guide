@@ -33,10 +33,15 @@ export function Tutor(props: {
   const [q, setQ] = useState('')
   const [busy, setBusy] = useState(false)
   const [pending, setPending] = useState<string | null>(null) // question shown while its answer loads
+  const [pendingThreadId, setPendingThreadId] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [illus, setIllus] = useState<Record<string, IllusEntry>>({})
   const startedIllus = useRef<Set<string>>(new Set())
   const scrollRef = useRef<HTMLDivElement>(null)
+  const openIdRef = useRef<string | null>(openThreadId)
+  useEffect(() => {
+    openIdRef.current = openThreadId
+  }, [openThreadId])
 
   useEffect(() => {
     if (openThreadId == null) {
@@ -75,26 +80,36 @@ export function Tutor(props: {
   }
 
   const ask = async (question: string): Promise<void> => {
-    if (!question.trim() || busy) return
+    const text = question.trim()
+    if (!text || busy) return
     setBusy(true)
-    setPending(question.trim())
     setError(null)
     setQ('')
+    const cc = thread?.courseCode ?? (course || undefined)
     try {
-      const res = await window.pgp.askTutor({
-        question: question.trim(),
-        courseCode: thread?.courseCode ?? (course || undefined),
-        threadId: thread?.id
-      })
+      // New conversation → create the titled thread first and switch to it, so
+      // it shows in Recents immediately and "Teaching…" lives in its own thread.
+      let threadId = thread?.id
+      if (!threadId) {
+        const started = await window.pgp.tutorStart(text, cc)
+        threadId = started.threadId
+        setThread(await window.pgp.getThread(threadId))
+        onOpenThread(threadId)
+        onThreadsChanged()
+      }
+      setPending(text)
+      setPendingThreadId(threadId)
+
+      const res = await window.pgp.askTutor({ question: text, courseCode: cc, threadId })
       const detail = await window.pgp.getThread(res.threadId)
-      setThread(detail)
-      if (openThreadId !== res.threadId) onOpenThread(res.threadId)
+      if (openIdRef.current === res.threadId) setThread(detail)
       onThreadsChanged()
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e))
     } finally {
       setBusy(false)
       setPending(null)
+      setPendingThreadId(null)
     }
   }
 
@@ -137,7 +152,7 @@ export function Tutor(props: {
           <TurnView key={turn.id} turn={turn} illus={illus} onNeedIllustration={needIllustration} />
         ))}
 
-        {pending && (
+        {pending && pendingThreadId === openThreadId && (
           <div className="turn">
             <div className="turn-q">{pending}</div>
             <div className="turn-a">

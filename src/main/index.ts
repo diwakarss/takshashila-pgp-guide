@@ -159,6 +159,9 @@ function registerIpc(): void {
 
   ipcMain.handle(IPC.corpusCourses, () => studyBrain.courses())
 
+  ipcMain.handle(IPC.tutorStart, (_e, req: { question: string; courseCode?: string }) =>
+    studyBrain.createTutorThread(req.question, req.courseCode)
+  )
   ipcMain.handle(IPC.tutorAsk, (_e, req: AskRequest) => studyBrain.ask(req))
   ipcMain.handle(IPC.researchStart, (_e, question: string) => studyBrain.createResearchThread(question))
   ipcMain.handle(IPC.researchAsk, (_e, req: ResearchRequest) => studyBrain.research(req))

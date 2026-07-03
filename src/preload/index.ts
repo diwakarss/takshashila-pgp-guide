@@ -41,6 +41,8 @@ const api = {
   search: (query: string): Promise<SearchHit[]> => ipcRenderer.invoke(IPC.brainSearch, query),
   courses: (): Promise<CourseSummary[]> => ipcRenderer.invoke(IPC.corpusCourses),
   engineStatus: (): Promise<EngineStatus> => ipcRenderer.invoke(IPC.engineStatus),
+  tutorStart: (question: string, courseCode?: string): Promise<{ threadId: string; title: string }> =>
+    ipcRenderer.invoke(IPC.tutorStart, { question, courseCode }),
   askTutor: (req: AskRequest): Promise<AskResult> => ipcRenderer.invoke(IPC.tutorAsk, req),
   researchStart: (question: string): Promise<{ threadId: string; title: string }> =>
     ipcRenderer.invoke(IPC.researchStart, question),

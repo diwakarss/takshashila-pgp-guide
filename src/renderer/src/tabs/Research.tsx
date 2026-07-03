@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type MouseEvent as ReactMouseEvent } from 'react'
 import { Search, ExternalLink, Users, Scale, Table2, Clock, BookmarkPlus } from 'lucide-react'
 import { Md, toSuperscriptCitations } from '../components/Markdown'
+import { selectionToMarkdown } from '../lib/selection'
 import type {
   EngineStatus,
   LensKind,
@@ -261,7 +262,9 @@ export function Research(props: {
         <div className="capture-overlay" onMouseDown={() => setPicker(null)}>
           <div className="capture-panel" onMouseDown={(e) => e.stopPropagation()}>
             <div className="capture-head">Add to Notebook</div>
-            <blockquote className="capture-quote">{picker.text}</blockquote>
+            <blockquote className="capture-quote answer-md">
+              <Md>{picker.text}</Md>
+            </blockquote>
             <label className="capture-field">
               <span className="course-select-label">Page</span>
               <select value={pickPage} onChange={(e) => setPickPage(e.target.value)}>
@@ -301,7 +304,8 @@ export function Research(props: {
 // Turn a text selection inside an answer into a capture, keyed to that answer's sources.
 function selectionCapture(sources: NoteSource[], from: string, onCapture: CaptureFn): (e: ReactMouseEvent) => void {
   return (e) => {
-    const text = window.getSelection()?.toString().trim() ?? ''
+    // Capture as Markdown so lists/tables/emphasis survive into the Notebook.
+    const text = selectionToMarkdown()
     if (text.length < 3) return
     onCapture({ text, sources, from }, e.clientX, e.clientY)
   }

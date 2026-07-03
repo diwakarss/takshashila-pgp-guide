@@ -27,6 +27,8 @@ export const IPC = {
   corpusCourses: 'corpus:courses',
   /** Which engine is connected and whether it's usable right now. */
   engineStatus: 'engine:status',
+  /** Create (and title) a tutor thread up-front, before the answer runs. */
+  tutorStart: 'tutor:start',
   /** Ask the tutor in a thread (new if no threadId); returns the appended turn. */
   tutorAsk: 'tutor:ask',
   /** Create (and title) a research thread up-front, before the slow search runs. */

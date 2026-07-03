@@ -135,6 +135,16 @@ class StudyBrainService {
 
   // ── conversation ────────────────────────────────────────────────────────
 
+  /** Create an (empty) tutor thread titled from the question, returning its id,
+   *  so the UI shows it immediately before the (slower) answer runs into it. */
+  async createTutorThread(question: string, courseCode?: string): Promise<{ threadId: string; title: string }> {
+    const brain = await this.open()
+    const threadId = randomUUID()
+    const title = makeTitle(question)
+    await brain.createThread({ id: threadId, tab: 'tutor', courseCode: courseCode ?? null, title })
+    return { threadId, title }
+  }
+
   /** Ask in a thread (new if no threadId). Loads prior turns as context, runs
    *  the tutor, persists the turn, and returns it. Course is locked per thread. */
   async ask(req: AskRequest): Promise<AskResult> {
