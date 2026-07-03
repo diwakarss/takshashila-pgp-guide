@@ -313,17 +313,66 @@ export type AddSnippetRequest = {
 // ── projects (no-write scaffold: assignments · capstone · personal) ────────
 export type ProjectKind = 'assignment' | 'capstone' | 'personal'
 
-// Bardach's 8-step policy analysis, each carrying a Takshashila India lens hint.
+// Bardach's 8-step policy analysis: each step carries a plain-language guide
+// (what the student should actually DO) and a Takshashila India-lens hint.
 // Static UI + prompt content shared by main (coach prompts) and renderer.
 export const BARDACH_STEPS = [
-  { key: 'define', title: 'Define the problem', lens: 'Is this a state-capacity problem?' },
-  { key: 'evidence', title: 'Assemble evidence', lens: 'What does the data actually say?' },
-  { key: 'alternatives', title: 'Construct alternatives', lens: 'Union / State / Concurrent?' },
-  { key: 'criteria', title: 'Select criteria', lens: 'Better-or-worse, not good-or-bad' },
-  { key: 'outcomes', title: 'Project the outcomes', lens: 'All sectors can fail' },
-  { key: 'tradeoffs', title: 'Confront the trade-offs', lens: 'Who bears the cost?' },
-  { key: 'decide', title: 'Decide', lens: 'Defensible on the evidence?' },
-  { key: 'story', title: 'Tell your story', lens: 'Clear to a non-expert?' }
+  {
+    key: 'define',
+    title: 'Define the problem',
+    guide:
+      'Say precisely what’s wrong, for whom, and how big it is. A strong problem definition fits in one sentence and includes a magnitude — not "energy prices are affected" but "diesel prices rose X%, hitting Y".',
+    lens: 'Is this a state-capacity problem?'
+  },
+  {
+    key: 'evidence',
+    title: 'Assemble evidence',
+    guide:
+      'Gather the data, reports, and examples that show the problem’s size and causes. Use "Find evidence" for leads, research in the Research tab, and pull your Notebook pages in with "Add evidence".',
+    lens: 'What does the data actually say?'
+  },
+  {
+    key: 'alternatives',
+    title: 'Construct alternatives',
+    guide:
+      'List 3–4 realistic courses of action (or, for an explainer: the markets/angles you could analyse). Always include "let present trends continue" as the baseline to compare against.',
+    lens: 'Union / State / Concurrent?'
+  },
+  {
+    key: 'criteria',
+    title: 'Select criteria',
+    guide:
+      'Decide how you’ll judge the alternatives — e.g. effectiveness, cost, equity, feasibility. Write them down; they’re what makes your analysis an argument instead of an opinion.',
+    lens: 'Better-or-worse, not good-or-bad'
+  },
+  {
+    key: 'outcomes',
+    title: 'Project the outcomes',
+    guide:
+      'For each alternative, predict what would actually happen — with magnitudes and mechanisms (who responds, how, why). This is the hardest and most honest step; don’t skip the uncomfortable numbers.',
+    lens: 'All sectors can fail'
+  },
+  {
+    key: 'tradeoffs',
+    title: 'Confront the trade-offs',
+    guide:
+      'No option wins on every criterion. Spell out what you gain and what you give up between the front-runners — who benefits, who bears the cost.',
+    lens: 'Who bears the cost?'
+  },
+  {
+    key: 'decide',
+    title: 'Decide',
+    guide:
+      'Commit to a position. Test it: could you defend it to a sceptic using only the evidence you assembled in step 2? If not, go back.',
+    lens: 'Defensible on the evidence?'
+  },
+  {
+    key: 'story',
+    title: 'Tell your story',
+    guide:
+      'Turn the analysis into a clear narrative for your audience — for this deliverable, your script or draft. Lead with the answer, then the mechanism, then the evidence. Plain words beat jargon.',
+    lens: 'Clear to a non-expert?'
+  }
 ] as const
 
 export type ProjectEvidence = { id: string; title: string; note: string; sources: NoteSource[]; pageId: string | null }

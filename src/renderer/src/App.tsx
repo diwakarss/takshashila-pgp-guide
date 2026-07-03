@@ -20,6 +20,8 @@ export function App(): JSX.Element {
   const [openThreadId, setOpenThreadId] = useState<string | null>(null)
   const [openResearchId, setOpenResearchId] = useState<string | null>(null)
   const [openNotebookId, setOpenNotebookId] = useState<string | null>(null)
+  const [openProjectId, setOpenProjectId] = useState<string | null>(null)
+  const [projectsVersion, setProjectsVersion] = useState(0)
   const [threadsVersion, setThreadsVersion] = useState(0)
   const [quizStatsVersion, setQuizStatsVersion] = useState(0)
   const [notebookVersion, setNotebookVersion] = useState(0)
@@ -79,9 +81,13 @@ export function App(): JSX.Element {
         quizStatsVersion={quizStatsVersion}
         openNotebookId={openNotebookId}
         notebookVersion={notebookVersion}
+        openProjectId={openProjectId}
+        projectsVersion={projectsVersion}
         onOpenThread={openThread}
         onOpenNotebook={setOpenNotebookId}
         onNotebookChanged={() => setNotebookVersion((v) => v + 1)}
+        onOpenProject={setOpenProjectId}
+        onProjectsChanged={() => setProjectsVersion((v) => v + 1)}
       />
       <div className="main-col">
         <TopBar tab={tab} courses={courses} course={course} onCourse={chooseCourse} />
@@ -128,7 +134,14 @@ export function App(): JSX.Element {
               onChanged={() => setNotebookVersion((v) => v + 1)}
             />
           )}
-          {tab === 'projects' && <Projects engine={status.engine} />}
+          {tab === 'projects' && (
+            <Projects
+              engine={status.engine}
+              openId={openProjectId}
+              onOpenProject={setOpenProjectId}
+              onChanged={() => setProjectsVersion((v) => v + 1)}
+            />
+          )}
           {tab === 'settings' && <Settings status={status} />}
         </main>
       </div>

@@ -1,16 +1,18 @@
 import { useEffect, useRef, useState } from 'react'
 import {
-  ArrowLeft,
+  FileText,
   Check,
   Sparkles,
   Search,
   Users,
   ClipboardCheck,
   Repeat,
-  Plus,
   Trash2,
   BookMarked,
-  Copy
+  Copy,
+  ChevronRight,
+  X,
+  Lightbulb
 } from 'lucide-react'
 import { Md } from '../components/Markdown'
 import { BARDACH_STEPS } from '../../../shared/ipc'
@@ -32,12 +34,12 @@ const AI_DISCLAIMERS = [
   'The analysis in this assignment was done with the support of AI tools for research leads and copy-editing; the final work is my own.'
 ]
 
-const COACH_BAR: { action: CoachAction; label: string; icon: typeof Sparkles }[] = [
-  { action: 'brainstorm', label: 'Brainstorm', icon: Sparkles },
-  { action: 'evidence', label: 'Find evidence', icon: Search },
-  { action: 'stakeholders', label: 'Stakeholder map', icon: Users },
-  { action: 'proofread', label: 'Proofread', icon: ClipboardCheck },
-  { action: 'review', label: 'Review draft', icon: Repeat }
+const COACH_BAR: { action: CoachAction; label: string; hint: string; icon: typeof Sparkles }[] = [
+  { action: 'brainstorm', label: 'Brainstorm', hint: 'Socratic questions to get you thinking — it won’t answer for you', icon: Sparkles },
+  { action: 'evidence', label: 'Find evidence', hint: 'Real sources and datasets to go gather', icon: Search },
+  { action: 'stakeholders', label: 'Stakeholder map', hint: 'Who’s involved: Actor · Position · Interest · Influence', icon: Users },
+  { action: 'proofread', label: 'Proofread', hint: 'Suggestions on YOUR draft — never a rewrite', icon: ClipboardCheck },
+  { action: 'review', label: 'Review draft', hint: 'A critical read: argument, values, causal logic', icon: Repeat }
 ]
 
 function dueLabel(dueAt: string | null): { text: string; tone: 'soon' | 'overdue' | 'ok' } | null {
@@ -50,117 +52,100 @@ function dueLabel(dueAt: string | null): { text: string; tone: 'soon' | 'overdue
   return { text: `Due ${date} · ${days} day${days === 1 ? '' : 's'}`, tone: days <= 3 ? 'soon' : 'ok' }
 }
 
-// Projects — assignment-driven, no-write scaffold (PRD §8.5). List of
-// assignments/capstone/personal; opening one gives a Bardach-step workspace
-// where the AI coaches (brainstorm / evidence / stakeholders / proofread /
-// review) but never writes the deliverable. Evidence pulls in Notebook pages.
-export function Projects(props: { engine: EngineStatus | null }): JSX.Element {
-  const { engine } = props
-  const [openId, setOpenId] = useState<string | null>(null)
-
-  if (openId) return <Editor id={openId} engine={engine} onBack={() => setOpenId(null)} />
-  return <ProjectList onOpen={setOpenId} />
+// Projects — assignment-driven, no-write scaffold (PRD §8.5). The project list
+// lives in the sidebar (uniform with other tabs); this pane shows either a
+// how-it-works welcome or the open project's guided workspace.
+export function Projects(props: {
+  engine: EngineStatus | null
+  openId: string | null
+  onOpenProject: (id: string | null) => void
+  onChanged: () => void
+}): JSX.Element {
+  const { engine, openId, onOpenProject, onChanged } = props
+  if (openId) return <Editor id={openId} engine={engine} onChanged={onChanged} />
+  return <Welcome onOpen={onOpenProject} onChanged={onChanged} />
 }
 
-function ProjectList({ onOpen }: { onOpen: (id: string) => void }): JSX.Element {
+// ── welcome / how it works ─────────────────────────────────────────────────
+function Welcome({ onOpen, onChanged }: { onOpen: (id: string) => void; onChanged: () => void }): JSX.Element {
   const [overview, setOverview] = useState<ProjectsOverview | null>(null)
-  const [newTitle, setNewTitle] = useState('')
-
-  const refresh = (): void => {
+  useEffect(() => {
     void window.pgp.projectsOverview().then(setOverview)
-  }
-  useEffect(refresh, [])
+  }, [])
 
   const openItem = async (item: ProjectListItem): Promise<void> => {
     const p = await window.pgp.openProject(item.id)
-    if (p) onOpen(p.id)
-  }
-  const createPersonal = async (): Promise<void> => {
-    const p = await window.pgp.createPersonalProject(newTitle)
-    setNewTitle('')
-    onOpen(p.id)
+    if (p) {
+      onOpen(p.id)
+      onChanged()
+    }
   }
 
-  const Card = ({ item }: { item: ProjectListItem }): JSX.Element => {
-    const due = dueLabel(item.dueAt)
-    return (
-      <button className="proj-card" onClick={() => void openItem(item)}>
-        <div className="proj-card-top">
-          <span className="proj-card-title">{item.title}</span>
-          {item.courseCode && <span className="proj-course">{item.courseCode}</span>}
-        </div>
-        <div className="proj-card-meta">
-          <span>{item.deliverable}</span>
-          {due && <span className={`proj-due ${due.tone}`}>{due.text}</span>}
-        </div>
-        {item.started ? (
-          <div className="proj-progress" title={`${Math.round(item.progress * 100)}% through the framework`}>
-            <span style={{ width: `${Math.round(item.progress * 100)}%` }} />
-          </div>
-        ) : (
-          <span className="proj-start-hint">Not started — open to begin</span>
-        )}
-      </button>
-    )
-  }
+  const upNext = overview ? [...overview.assignments].sort((a, b) => (a.dueAt ?? '9') < (b.dueAt ?? '9') ? -1 : 1) : []
 
   return (
-    <div className="surface proj-list">
+    <div className="surface proj-welcome">
       <header className="surface-head">
         <h1>Projects</h1>
-        <p className="muted">Draft assignments and your capstone with the scholar framework — it coaches, you write.</p>
+        <p className="muted">Where your assignments and capstone get written — with a coach, not a ghostwriter.</p>
       </header>
 
-      {!overview ? (
-        <p className="muted">Loading…</p>
-      ) : (
-        <>
-          <section className="proj-group">
-            <div className="recents-label">Assignments</div>
-            <div className="proj-cards">
-              {overview.assignments.length === 0 && <p className="muted small">No assignments yet.</p>}
-              {overview.assignments.map((a) => (
-                <Card key={a.id} item={a} />
-              ))}
-            </div>
-          </section>
+      <section className="card proj-how">
+        <h2>How it works</h2>
+        <ol className="proj-how-list">
+          <li>
+            <strong>Pick a project</strong> from the left — an assignment, your capstone, or a personal piece.
+          </li>
+          <li>
+            <strong>Read the brief</strong>, then work through the 8 steps of a policy analysis. Each step tells
+            you exactly what to do; tick it off and move to the next.
+          </li>
+          <li>
+            <strong>Write in your own words</strong> in the draft pane. The coach buttons help you think, find
+            evidence, and proofread — they will never write your submission for you (Takshashila’s AI policy).
+          </li>
+          <li>
+            <strong>Pull in evidence</strong> from your Notebook, and when you’re done, copy the export — draft,
+            bibliography, and the required disclaimers, ready to submit.
+          </li>
+        </ol>
+      </section>
 
-          {overview.capstone && (
-            <section className="proj-group">
-              <div className="recents-label">Capstone</div>
-              <div className="proj-cards">
-                <Card item={overview.capstone} />
-              </div>
-            </section>
-          )}
-
-          <section className="proj-group">
-            <div className="recents-label">Personal writing</div>
-            <div className="proj-cards">
-              {overview.personal.map((p) => (
-                <Card key={p.id} item={p} />
-              ))}
-            </div>
-            <div className="proj-new">
-              <input
-                className="input"
-                placeholder="New project title (op-ed, Substack post…)"
-                value={newTitle}
-                onChange={(e) => setNewTitle(e.target.value)}
-                onKeyDown={(e) => e.key === 'Enter' && newTitle.trim() && void createPersonal()}
-              />
-              <button className="btn primary" disabled={!newTitle.trim()} onClick={() => void createPersonal()}>
-                <Plus size={15} /> New
-              </button>
-            </div>
-          </section>
-        </>
+      {upNext.length > 0 && (
+        <section className="proj-group">
+          <div className="recents-label">Up next</div>
+          <div className="proj-cards">
+            {upNext.map((a) => {
+              const due = dueLabel(a.dueAt)
+              return (
+                <button key={a.id} className="proj-card" onClick={() => void openItem(a)}>
+                  <div className="proj-card-top">
+                    <span className="proj-card-title">{a.title}</span>
+                    {a.courseCode && <span className="proj-course">{a.courseCode}</span>}
+                  </div>
+                  <div className="proj-card-meta">
+                    <span>{a.deliverable}</span>
+                    {due && <span className={`proj-due ${due.tone}`}>{due.text}</span>}
+                  </div>
+                  {a.started ? (
+                    <div className="proj-progress">
+                      <span style={{ width: `${Math.round(a.progress * 100)}%` }} />
+                    </div>
+                  ) : (
+                    <span className="proj-start-hint">Not started — open to begin</span>
+                  )}
+                </button>
+              )
+            })}
+          </div>
+        </section>
       )}
     </div>
   )
 }
 
-function Editor({ id, engine, onBack }: { id: string; engine: EngineStatus | null; onBack: () => void }): JSX.Element {
+// ── the guided workspace ───────────────────────────────────────────────────
+function Editor({ id, engine, onChanged }: { id: string; engine: EngineStatus | null; onChanged: () => void }): JSX.Element {
   const [project, setProject] = useState<Project | null>(null)
   const [draft, setDraft] = useState('')
   const [saveState, setSaveState] = useState<'idle' | 'saving' | 'saved'>('idle')
@@ -169,19 +154,28 @@ function Editor({ id, engine, onBack }: { id: string; engine: EngineStatus | nul
   const [showEvidence, setShowEvidence] = useState(false)
   const [pages, setPages] = useState<NotebookPageSummary[]>([])
   const [toast, setToast] = useState<string | null>(null)
+  const [showIntro, setShowIntro] = useState(() => localStorage.getItem('pgp.projIntroSeen') !== '1')
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const engineReady = engine?.available ?? false
 
   useEffect(() => {
+    setCoach(null)
     void window.pgp.openProject(id).then((p) => {
       setProject(p)
       setDraft(p?.draft ?? '')
+      setSaveState('idle')
     })
   }, [id])
+
+  const dismissIntro = (): void => {
+    localStorage.setItem('pgp.projIntroSeen', '1')
+    setShowIntro(false)
+  }
 
   const patch = async (p: { title?: string; draft?: string; step?: number; done?: number[] }): Promise<void> => {
     const updated = await window.pgp.updateProject(id, p)
     if (updated) setProject(updated)
+    onChanged()
   }
 
   const saveDraft = (next: string): void => {
@@ -200,6 +194,14 @@ function Editor({ id, engine, onBack }: { id: string; engine: EngineStatus | nul
     if (!project) return
     const done = project.done.includes(i) ? project.done.filter((x) => x !== i) : [...project.done, i]
     void patch({ done })
+  }
+
+  // The friendly path: mark the current step done and advance to the next.
+  const completeStep = (): void => {
+    if (!project) return
+    const done = project.done.includes(project.step) ? project.done : [...project.done, project.step]
+    const step = Math.min(project.step + 1, BARDACH_STEPS.length - 1)
+    void patch({ done, step })
   }
 
   const runCoach = async (action: CoachAction): Promise<void> => {
@@ -222,15 +224,7 @@ function Editor({ id, engine, onBack }: { id: string; engine: EngineStatus | nul
   const addEvidence = async (pageId: string): Promise<void> => {
     const page = await window.pgp.notebookGet(pageId)
     if (!page) return
-    const sources: NoteSource[] = []
-    const seen = new Set<string>()
-    for (const s of page.snippets.flatMap((x) => x.sources)) {
-      const key = (s.url || s.title).toLowerCase()
-      if (!seen.has(key)) {
-        seen.add(key)
-        sources.push(s)
-      }
-    }
+    const sources = dedupe(page.snippets.flatMap((x) => x.sources))
     const updated = await window.pgp.addProjectEvidence(id, {
       title: page.title,
       note: `${page.snippets.length} note${page.snippets.length === 1 ? '' : 's'}`,
@@ -277,17 +271,17 @@ function Editor({ id, engine, onBack }: { id: string; engine: EngineStatus | nul
 
   const step = BARDACH_STEPS[project.step]
   const due = dueLabel(project.dueAt)
+  const isLastStep = project.step >= BARDACH_STEPS.length - 1
+  const stepDone = project.done.includes(project.step)
 
   return (
     <div className="proj-editor">
       <div className="proj-ed-head">
-        <button className="btn ghost proj-back" onClick={onBack}>
-          <ArrowLeft size={16} /> Projects
-        </button>
         {project.kind === 'personal' ? (
           <input
             className="nb-title proj-title-input"
             value={project.title}
+            placeholder="Project title"
             onChange={(e) => {
               setProject({ ...project, title: e.target.value })
               void patch({ title: e.target.value })
@@ -303,21 +297,32 @@ function Editor({ id, engine, onBack }: { id: string; engine: EngineStatus | nul
         </div>
       </div>
 
-      <div className="proj-banner">
-        🛡️ It’s a scaffold, not a shortcut — the AI coaches and proofreads, <strong>you write</strong>. Add your
-        anti-plagiarism &amp; AI-use disclaimers on submission.
-      </div>
+      {showIntro && (
+        <div className="proj-intro">
+          <Lightbulb size={16} className="proj-intro-icon" />
+          <div>
+            <strong>First time here?</strong> Read the brief below, then follow the steps on the left — the “What
+            to do” card walks you through each one. Draft in your own words; the coach buttons help you think but
+            never write for you. When done, copy the export with your disclaimers.
+          </div>
+          <button className="icon-btn" title="Got it" onClick={dismissIntro}>
+            <X size={15} />
+          </button>
+        </div>
+      )}
 
       {project.brief && (
-        <details className="proj-brief">
-          <summary>Assignment brief</summary>
+        <section className="proj-brief-card">
+          <div className="proj-brief-head">
+            <FileText size={15} /> The brief
+          </div>
           <p>{project.brief}</p>
-        </details>
+        </section>
       )}
 
       <div className="proj-body">
         <aside className="proj-steps">
-          <div className="recents-label">Bardach’s 8 steps</div>
+          <div className="recents-label">Your 8 steps</div>
           <ul>
             {BARDACH_STEPS.map((s, i) => {
               const done = project.done.includes(i)
@@ -326,10 +331,12 @@ function Editor({ id, engine, onBack }: { id: string; engine: EngineStatus | nul
                 <li key={s.key}>
                   <button
                     className={`proj-step${active ? ' active' : ''}${done ? ' done' : ''}`}
+                    title={s.guide}
                     onClick={() => void patch({ step: i })}
                   >
                     <span
                       className={`proj-step-box${done ? ' on' : ''}`}
+                      title={done ? 'Mark not done' : 'Mark done'}
                       onClick={(e) => {
                         e.stopPropagation()
                         toggleDone(i)
@@ -345,29 +352,51 @@ function Editor({ id, engine, onBack }: { id: string; engine: EngineStatus | nul
               )
             })}
           </ul>
-          {step && <div className="proj-lens">India lens · {step.lens}</div>}
+          <p className="proj-steps-hint muted small">
+            The classic 8 steps of a policy analysis (Bardach). Click a step to focus it.
+          </p>
         </aside>
 
         <div className="proj-main">
+          {step && (
+            <section className="proj-stepguide">
+              <div className="proj-stepguide-head">
+                <span className="proj-stepguide-label">
+                  Step {project.step + 1} of {BARDACH_STEPS.length} · What to do
+                </span>
+                <span className="proj-lens-chip">India lens · {step.lens}</span>
+              </div>
+              <p className="proj-stepguide-text">{step.guide}</p>
+              <button className="btn primary proj-step-next" onClick={completeStep} disabled={stepDone && isLastStep}>
+                {isLastStep ? (stepDone ? 'All steps done ✓' : 'Mark final step done') : (
+                  <>
+                    Done — next step <ChevronRight size={15} />
+                  </>
+                )}
+              </button>
+            </section>
+          )}
+
           <div className="proj-toolbar">
-            {COACH_BAR.map(({ action, label, icon: Icon }) => (
+            {COACH_BAR.map(({ action, label, hint, icon: Icon }) => (
               <button
                 key={action}
                 className="lens-btn"
+                title={hint}
                 disabled={!engineReady || !!coaching}
                 onClick={() => void runCoach(action)}
               >
                 <Icon size={14} /> {coaching === action ? 'Coaching…' : label}
               </button>
             ))}
-            <button className="lens-btn" onClick={openEvidence}>
+            <button className="lens-btn" title="Pull a Notebook page (notes + sources) into this project" onClick={openEvidence}>
               <BookMarked size={14} /> Add evidence
             </button>
           </div>
 
           <textarea
             className="proj-draft"
-            placeholder={`Write your ${project.deliverable.toLowerCase().includes('video') ? 'video script' : 'draft'} here — in your own words. The step you’re on: ${step?.title ?? ''}.`}
+            placeholder={`Your ${project.deliverable.toLowerCase().includes('video') ? 'video script' : 'draft'} — in your own words. Start rough; the coach can proofread once something’s here.`}
             value={draft}
             onChange={(e) => saveDraft(e.target.value)}
           />
@@ -384,7 +413,7 @@ function Editor({ id, engine, onBack }: { id: string; engine: EngineStatus | nul
               <div className="proj-coach-head">
                 {coach.title}
                 <button className="icon-btn" title="Dismiss" onClick={() => setCoach(null)}>
-                  <Trash2 size={14} />
+                  <X size={14} />
                 </button>
               </div>
               <div className="answer-md">

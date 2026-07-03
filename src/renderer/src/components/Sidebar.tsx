@@ -1,7 +1,15 @@
 import { useEffect, useRef, useState, type MouseEvent as ReactMouseEvent } from 'react'
 import { Settings as SettingsIcon, Plus, PanelLeftClose, PanelLeft, Flame, Search } from 'lucide-react'
 import { NAV_TABS, type TabId } from '../tabs'
-import type { BrainStats, EngineStatus, NotebookPageSummary, QuizStats, Thread } from '../../../shared/ipc'
+import type {
+  BrainStats,
+  EngineStatus,
+  NotebookPageSummary,
+  ProjectListItem,
+  ProjectsOverview,
+  QuizStats,
+  Thread
+} from '../../../shared/ipc'
 
 // The persistent shell (design D3): a search box, the nav tabs, then — for the
 // active tab — a list panel (Recents for Tutor/Research, pages for Notebook,
@@ -17,9 +25,13 @@ export function Sidebar(props: {
   quizStatsVersion: number
   openNotebookId: string | null
   notebookVersion: number
+  openProjectId: string | null
+  projectsVersion: number
   onOpenThread: (id: string | null) => void
   onOpenNotebook: (id: string | null) => void
   onNotebookChanged: () => void
+  onOpenProject: (id: string | null) => void
+  onProjectsChanged: () => void
 }): JSX.Element {
   const {
     active,
@@ -31,9 +43,13 @@ export function Sidebar(props: {
     quizStatsVersion,
     openNotebookId,
     notebookVersion,
+    openProjectId,
+    projectsVersion,
     onOpenThread,
     onOpenNotebook,
-    onNotebookChanged
+    onNotebookChanged,
+    onOpenProject,
+    onProjectsChanged
   } = props
   const [collapsed, setCollapsed] = useState(false)
   const MIN_W = 180
@@ -46,12 +62,14 @@ export function Sidebar(props: {
   const [threads, setThreads] = useState<Thread[]>([])
   const [quiz, setQuiz] = useState<QuizStats | null>(null)
   const [nbPages, setNbPages] = useState<NotebookPageSummary[]>([])
+  const [projects, setProjects] = useState<ProjectsOverview | null>(null)
   const [query, setQuery] = useState('')
 
   const isThreadTab = active === 'tutor' || active === 'research'
   const showQuiz = active === 'quiz'
   const showNotebook = active === 'notebook'
-  const searchable = isThreadTab || showNotebook
+  const showProjects = active === 'projects'
+  const searchable = isThreadTab || showNotebook || showProjects
 
   // Fresh search per tab.
   useEffect(() => setQuery(''), [active])
@@ -69,13 +87,32 @@ export function Sidebar(props: {
     if (showNotebook) void window.pgp.notebookList(query || undefined).then(setNbPages)
   }, [showNotebook, query, notebookVersion])
 
+  useEffect(() => {
+    if (showProjects) void window.pgp.projectsOverview().then(setProjects)
+  }, [showProjects, projectsVersion])
+
   const q = query.trim().toLowerCase()
   const shownThreads = q ? threads.filter((t) => t.title.toLowerCase().includes(q)) : threads
+  const matchProj = (p: ProjectListItem): boolean => !q || p.title.toLowerCase().includes(q)
 
   const newNotebookPage = async (): Promise<void> => {
     const p = await window.pgp.notebookCreate()
     onOpenNotebook(p.id)
     onNotebookChanged()
+  }
+
+  const newPersonalProject = async (): Promise<void> => {
+    const p = await window.pgp.createPersonalProject('')
+    onOpenProject(p.id)
+    onProjectsChanged()
+  }
+
+  const openProjectItem = async (item: ProjectListItem): Promise<void> => {
+    const p = await window.pgp.openProject(item.id) // creates the workspace on first open
+    if (p) {
+      onOpenProject(p.id)
+      onProjectsChanged()
+    }
   }
 
   // Drag the right edge to resize; width persists across launches.
@@ -115,7 +152,9 @@ export function Sidebar(props: {
         <div className="nb-search sidebar-search">
           <Search size={14} />
           <input
-            placeholder={showNotebook ? 'Search notes + sources…' : 'Search conversations…'}
+            placeholder={
+              showNotebook ? 'Search notes + sources…' : showProjects ? 'Search projects…' : 'Search conversations…'
+            }
             value={query}
             onChange={(e) => setQuery(e.target.value)}
           />
@@ -199,6 +238,32 @@ export function Sidebar(props: {
           </div>
         )}
 
+        {showProjects && !collapsed && projects && (
+          <div className="recents">
+            <button className="new-conv" onClick={newPersonalProject}>
+              <Plus size={15} /> New project
+            </button>
+            <ProjectGroup
+              label="Assignments"
+              items={projects.assignments.filter(matchProj)}
+              openId={openProjectId}
+              onOpen={openProjectItem}
+            />
+            <ProjectGroup
+              label="Capstone"
+              items={projects.capstone && matchProj(projects.capstone) ? [projects.capstone] : []}
+              openId={openProjectId}
+              onOpen={openProjectItem}
+            />
+            <ProjectGroup
+              label="Personal"
+              items={projects.personal.filter(matchProj)}
+              openId={openProjectId}
+              onOpen={openProjectItem}
+            />
+          </div>
+        )}
+
         {showQuiz && !collapsed && <QuizSidePanel stats={quiz} />}
       </div>
 
@@ -226,6 +291,46 @@ export function Sidebar(props: {
         </button>
       </div>
     </nav>
+  )
+}
+
+// A grouped section of the Projects sidebar list (Assignments / Capstone / Personal).
+function ProjectGroup(props: {
+  label: string
+  items: ProjectListItem[]
+  openId: string | null
+  onOpen: (item: ProjectListItem) => void
+}): JSX.Element | null {
+  const { label, items, openId, onOpen } = props
+  if (items.length === 0 && label !== 'Assignments') return null
+  return (
+    <>
+      <div className="recents-label">{label}</div>
+      <ul className="recents-list">
+        {items.length === 0 && <li className="recents-empty">None yet</li>}
+        {items.map((p) => {
+          const days = p.dueAt ? Math.ceil((new Date(p.dueAt).getTime() - Date.now()) / 86_400_000) : null
+          const due =
+            days === null ? null : days < 0 ? 'overdue' : days === 0 ? 'due today' : `due in ${days}d`
+          return (
+            <li key={p.id}>
+              <button
+                className={`recent-item nb-recent${openId === p.id ? ' active' : ''}`}
+                title={p.title}
+                onClick={() => onOpen(p)}
+              >
+                <span className="nb-recent-title">{p.title}</span>
+                <span className="nb-recent-meta">
+                  {[p.courseCode, due, p.started ? `${Math.round(p.progress * 100)}%` : null]
+                    .filter(Boolean)
+                    .join(' · ') || p.deliverable}
+                </span>
+              </button>
+            </li>
+          )
+        })}
+      </ul>
+    </>
   )
 }
 
