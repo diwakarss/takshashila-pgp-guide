@@ -87,6 +87,18 @@ CREATE TABLE IF NOT EXISTS quiz_attempts (
 );
 CREATE INDEX IF NOT EXISTS quiz_attempts_time_idx ON quiz_attempts (created_at DESC);
 
+-- Per-question outcomes, keyed by the lesson (topic) each question tested. Feeds
+-- weak-spot review: lessons with low accuracy / not seen recently resurface.
+-- correct is 1 / 0.5 / 0.
+CREATE TABLE IF NOT EXISTS topic_reviews (
+  id          TEXT PRIMARY KEY,
+  course_code TEXT,
+  topic       TEXT NOT NULL,
+  correct     REAL NOT NULL,
+  created_at  TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS topic_reviews_topic_idx ON topic_reviews (topic);
+
 -- Illustration library: one row per drawn concept. Matched by embedding so a
 -- concept is drawn ONCE and reused across questions/phrasings (no per-answer
 -- regeneration). Ships with the corpus so students get illustrations for free.

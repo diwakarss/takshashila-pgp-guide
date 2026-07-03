@@ -164,6 +164,7 @@ function registerIpc(): void {
   )
   ipcMain.handle(IPC.quizRecord, (_e, result: QuizResult) => studyBrain.recordQuiz(result))
   ipcMain.handle(IPC.quizStats, () => studyBrain.quizStats())
+  ipcMain.handle(IPC.quizWeakSpots, (_e, courseCode?: string) => studyBrain.weakSpots(courseCode))
 
   ipcMain.handle(IPC.illustrationAvailable, () => studyBrain.imageGenEnabled() && imageEngine.isAvailable())
 
@@ -192,15 +193,36 @@ app.whenReady().then(() => {
     void (async () => {
       const before = await studyBrain.quizStats()
       console.log(`[stats] starting from ${before.totalQuizzes} attempts (leaving those intact would be wrong to seed)`)
-      await studyBrain.recordQuiz({ courseCode: 'PP231', courseName: 'Microeconomics-I', total: 8, correct: 6.5 })
-      await studyBrain.recordQuiz({ courseCode: 'PP231', courseName: 'Microeconomics-I', total: 5, correct: 5 })
-      const s = await studyBrain.recordQuiz({ courseCode: 'PP221', courseName: 'Public Policy', total: 10, correct: 4 })
+      await studyBrain.recordQuiz({
+        courseCode: 'PP231',
+        courseName: 'Microeconomics-I',
+        total: 3,
+        correct: 1,
+        answers: [
+          { topic: 'Opportunity cost', courseCode: 'PP231', correct: 0 },
+          { topic: 'Opportunity cost', courseCode: 'PP231', correct: 0 },
+          { topic: 'Gains from trade', courseCode: 'PP231', correct: 1 }
+        ]
+      })
+      const s = await studyBrain.recordQuiz({
+        courseCode: 'PP231',
+        courseName: 'Microeconomics-I',
+        total: 2,
+        correct: 1.5,
+        answers: [
+          { topic: 'Thinking at the margin', courseCode: 'PP231', correct: 0.5 },
+          { topic: 'Gains from trade', courseCode: 'PP231', correct: 1 }
+        ]
+      })
       console.log(
-        `[stats] level=${s.level} xp=${s.xp} (${s.levelXp}/${s.levelSpan}) streak=${s.streakDays} best=${s.bestStreak} ` +
+        `[stats] level=${s.level} xp=${s.xp} (${s.levelXp}/${s.levelSpan}) streak=${s.streakDays} ` +
           `quizzes=${s.totalQuizzes} acc=${Math.round(s.accuracy * 100)}%`
       )
-      console.log('[stats] byCourse:', JSON.stringify(s.byCourse.map((c) => ({ c: c.courseCode, n: c.quizzes, acc: Math.round(c.accuracy * 100) }))))
-      console.log('[stats] recent:', JSON.stringify(s.recent.map((a) => `${a.courseCode} ${a.correct}/${a.total}`)))
+      const weak = await studyBrain.weakSpots()
+      console.log('[stats] weak spots:', JSON.stringify(weak.map((w) => `${w.topic} ${Math.round(w.accuracy * 100)}% (n=${w.seen})`)))
+      // Generate a REVIEW quiz targeting the weak topics and confirm it builds.
+      const review = await studyBrain.generateQuiz({ courseCode: 'PP231', count: 3, focusTopics: weak.map((w) => w.topic) })
+      console.log(`[stats] review quiz: ${review.length} questions →`, JSON.stringify(review.map((q) => q.source ?? q.concept)))
       await studyBrain.clearQuizHistory()
       console.log(`[stats] cleaned up → ${(await studyBrain.quizStats()).totalQuizzes} attempts`)
     })().catch((e) => console.error('[stats] failed:', e))

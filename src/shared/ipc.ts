@@ -45,6 +45,8 @@ export const IPC = {
   quizRecord: 'quiz:record',
   /** Scoring history + XP / streak gamification stats. */
   quizStats: 'quiz:stats',
+  /** Weakest lessons (lowest accuracy / least recently seen) to review. */
+  quizWeakSpots: 'quiz:weakspots',
   /** Is on-demand illustration generation available on this machine? */
   illustrationAvailable: 'illustration:available',
   /** Generate (or return cached) one illustration; resolves to a data URL or an error reason. */
@@ -159,7 +161,7 @@ export type QuizQuestion = {
   concept: string // core idea, used to reuse a matching library illustration
 }
 
-export type QuizSpec = { courseCode?: string; count?: number }
+export type QuizSpec = { courseCode?: string; count?: number; focusTopics?: string[] }
 
 export type QuizVerdict = { verdict: 'correct' | 'partial' | 'incorrect'; feedback: string }
 
@@ -173,8 +175,21 @@ export type QuizAttempt = {
   createdAt: string
 }
 
+/** One answered question's outcome, keyed by the lesson it tested (for weak-spot
+ *  review). correct is 1 / 0.5 / 0. */
+export type QuizAnswerOutcome = { topic: string; courseCode?: string; correct: number }
+
 /** What a finished quiz records. */
-export type QuizResult = { courseCode?: string; courseName?: string; total: number; correct: number }
+export type QuizResult = {
+  courseCode?: string
+  courseName?: string
+  total: number
+  correct: number
+  answers?: QuizAnswerOutcome[]
+}
+
+/** A lesson you've been getting wrong or haven't revisited — a review target. */
+export type WeakSpot = { topic: string; courseCode: string | null; seen: number; accuracy: number }
 
 export type CourseAccuracy = { courseCode: string | null; courseName: string | null; quizzes: number; accuracy: number }
 

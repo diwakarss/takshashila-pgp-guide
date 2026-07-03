@@ -71,14 +71,20 @@ export function buildQuizPrompt(
   lessons: SearchHit[],
   courseName: string | null,
   count: number,
-  conceptTitles: string[]
+  conceptTitles: string[],
+  focusTopics: string[] = []
 ): EngineMessage[] {
   const material = lessons
     .map((h, i) => `[${i + 1}] "${h.title ?? h.slug}"\n${truncate(h.text, MAX_SOURCE_CHARS)}`)
     .join('\n\n')
+  const focusLine =
+    focusTopics.length > 0
+      ? `\n\nThis is a REVIEW quiz. The student has been getting these lessons wrong — concentrate the ` +
+        `questions on them: ${focusTopics.join('; ')}.`
+      : ''
   return [
     { role: 'system', content: quizSystem(courseName, count, conceptTitles) },
-    { role: 'user', content: `Lessons:\n${material}\n\nGenerate the ${count}-question quiz as JSON.` }
+    { role: 'user', content: `Lessons:\n${material}${focusLine}\n\nGenerate the ${count}-question quiz as JSON.` }
   ]
 }
 
@@ -154,11 +160,15 @@ export type QuizDeps = {
 
 export async function generateQuiz(spec: QuizSpec, deps: QuizDeps): Promise<QuizQuestion[]> {
   const count = Math.min(Math.max(spec.count ?? DEFAULT_COUNT, 1), 15)
-  const hits = await deps.search('core concepts, principles, definitions and key examples', MAX_SOURCES, spec.courseCode)
+  const focus = (spec.focusTopics ?? []).filter((t) => t.trim())
+  // In review mode, retrieve the material for the weak lessons; otherwise pull a
+  // broad spread of core material.
+  const query = focus.length > 0 ? focus.join(', ') : 'core concepts, principles, definitions and key examples'
+  const hits = await deps.search(query, MAX_SOURCES, spec.courseCode)
   const lessons = dedupeByLesson(hits)
   if (lessons.length === 0) return []
   const courseName = lessons.find((h) => h.courseName)?.courseName ?? null
-  const raw = await deps.engine.complete(buildQuizPrompt(lessons, courseName, count, deps.conceptTitles ?? []))
+  const raw = await deps.engine.complete(buildQuizPrompt(lessons, courseName, count, deps.conceptTitles ?? [], focus))
   return parseQuestions(raw).slice(0, count)
 }
 

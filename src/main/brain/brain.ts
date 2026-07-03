@@ -1,7 +1,7 @@
 import { PGlite } from '@electric-sql/pglite'
 import { vector } from '@electric-sql/pglite/vector'
 import { SCHEMA_SQL, EMBED_DIM } from './schema'
-import type { QuizAttempt, Thread, ThreadDetail, Turn, TutorReply } from '../../shared/ipc'
+import type { QuizAttempt, Thread, ThreadDetail, Turn, TutorReply, WeakSpot } from '../../shared/ipc'
 
 export type Source = 'corpus' | 'private'
 
@@ -290,9 +290,52 @@ export class Brain {
     }))
   }
 
+  /** Record per-question outcomes (keyed by lesson) for weak-spot review. */
+  async recordTopicReviews(
+    rows: { id: string; courseCode: string | null; topic: string; correct: number }[]
+  ): Promise<void> {
+    for (const r of rows) {
+      await this.db.query(
+        `INSERT INTO topic_reviews (id, course_code, topic, correct) VALUES ($1, $2, $3, $4)`,
+        [r.id, r.courseCode, r.topic, r.correct]
+      )
+    }
+  }
+
+  /** The weakest lessons: lowest accuracy first, then least-recently seen. Only
+   *  returns topics below `maxAccuracy` (a genuine weak spot), optionally scoped
+   *  to a course. */
+  async weakSpots(opts: { courseCode?: string; limit?: number; maxAccuracy?: number } = {}): Promise<WeakSpot[]> {
+    const limit = opts.limit ?? 6
+    const maxAccuracy = opts.maxAccuracy ?? 0.85
+    const params: unknown[] = [maxAccuracy]
+    let scope = ''
+    if (opts.courseCode) {
+      params.push(opts.courseCode)
+      scope = `WHERE course_code = $${params.length}`
+    }
+    const r = await this.db.query<{ topic: string; course_code: string | null; seen: number; accuracy: number }>(
+      `SELECT topic, course_code, count(*)::int AS seen, avg(correct) AS accuracy
+         FROM topic_reviews
+         ${scope}
+        GROUP BY topic, course_code
+       HAVING avg(correct) < $1
+        ORDER BY avg(correct) ASC, max(created_at) ASC
+        LIMIT ${limit}`,
+      params
+    )
+    return r.rows.map((x) => ({
+      topic: x.topic,
+      courseCode: x.course_code,
+      seen: Number(x.seen),
+      accuracy: Number(x.accuracy)
+    }))
+  }
+
   /** Wipe quiz history (dev/verification cleanup + a Settings reset later). */
   async clearQuizAttempts(): Promise<void> {
     await this.db.query(`DELETE FROM quiz_attempts`)
+    await this.db.query(`DELETE FROM topic_reviews`)
   }
 
   // ── conversation threads (private; never uploaded) ──────────────────────

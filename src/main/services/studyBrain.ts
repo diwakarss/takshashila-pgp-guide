@@ -27,7 +27,8 @@ import type {
   QuizVerdict,
   SearchHit,
   Thread,
-  ThreadDetail
+  ThreadDetail,
+  WeakSpot
 } from '../../shared/ipc'
 
 function makeTitle(question: string): string {
@@ -203,7 +204,25 @@ class StudyBrainService {
       total: result.total,
       correct: result.correct
     })
+    // Per-question outcomes (keyed by lesson) feed weak-spot review.
+    const answers = (result.answers ?? []).filter((a) => a.topic?.trim())
+    if (answers.length > 0) {
+      await brain.recordTopicReviews(
+        answers.map((a) => ({
+          id: randomUUID(),
+          courseCode: a.courseCode ?? result.courseCode ?? null,
+          topic: a.topic.trim(),
+          correct: a.correct
+        }))
+      )
+    }
     return this.quizStats()
+  }
+
+  /** Weakest lessons to review, optionally scoped to a course. */
+  async weakSpots(courseCode?: string): Promise<WeakSpot[]> {
+    const brain = await this.open()
+    return brain.weakSpots({ courseCode })
   }
 
   /** Wipe quiz history (dev verification; a Settings "reset progress" later). */

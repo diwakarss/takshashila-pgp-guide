@@ -1,12 +1,13 @@
 import { useEffect, useState } from 'react'
-import { CheckSquare, Check, X, RotateCcw, Flame, Trophy, Target, Sparkles } from 'lucide-react'
+import { CheckSquare, Check, X, RotateCcw, Flame, Trophy, Target, Sparkles, Repeat } from 'lucide-react'
 import type {
   CourseSummary,
   EngineStatus,
   IllustrationImage,
   QuizQuestion,
   QuizStats,
-  QuizVerdict
+  QuizVerdict,
+  WeakSpot
 } from '../../../shared/ipc'
 
 type Result = { correct: boolean; verdict?: QuizVerdict }
@@ -43,12 +44,19 @@ export function Quiz(props: {
   const [illus, setIllus] = useState<IllustrationImage | null>(null)
   const [results, setResults] = useState<Result[]>([])
   const [stats, setStats] = useState<QuizStats | null>(null) // pre-quiz stats, shown on setup
+  const [weak, setWeak] = useState<WeakSpot[]>([])
+  const [reviewing, setReviewing] = useState(false)
   const [earned, setEarned] = useState<{ xp: number; leveledUp: boolean; stats: QuizStats } | null>(null)
 
   // Refresh scoring history whenever we return to setup (or another surface records).
   useEffect(() => {
     if (phase === 'setup') void window.pgp.quizStats().then(setStats)
   }, [phase, statsVersion])
+
+  // Weak spots depend on the selected course scope.
+  useEffect(() => {
+    if (phase === 'setup') void window.pgp.quizWeakSpots(course || undefined).then(setWeak)
+  }, [phase, statsVersion, course])
 
   const engineReady = engine?.available ?? false
   const q = questions[idx]
@@ -76,12 +84,13 @@ export function Quiz(props: {
     }
   }, [revealed, idx]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  const start = async (): Promise<void> => {
+  const start = async (focusTopics?: string[]): Promise<void> => {
     setBusy(true)
     setError(null)
     setEarned(null)
+    setReviewing(!!focusTopics?.length)
     try {
-      const qs = await window.pgp.generateQuiz({ courseCode: course || undefined, count })
+      const qs = await window.pgp.generateQuiz({ courseCode: course || undefined, count, focusTopics })
       if (qs.length === 0) {
         setError('Couldn’t generate a quiz for this scope — try another course.')
         return
@@ -133,11 +142,19 @@ export function Quiz(props: {
     setPhase('done')
     try {
       const before = stats
+      // Per-question outcomes (parallel to `questions` — we always go in order),
+      // keyed by the lesson each tested, feed weak-spot review.
+      const answers = results.map((r, i) => ({
+        topic: questions[i]?.source || questions[i]?.concept || 'General',
+        courseCode: course || undefined,
+        correct: r.correct ? 1 : r.verdict?.verdict === 'partial' ? 0.5 : 0
+      }))
       const updated = await window.pgp.recordQuiz({
         courseCode: course || undefined,
         courseName: courses.find((c) => c.code === course)?.name,
         total: questions.length,
-        correct: score
+        correct: score,
+        answers
       })
       setEarned({ xp: updated.xp - (before?.xp ?? 0), leveledUp: before ? updated.level > before.level : false, stats: updated })
       setStats(updated)
@@ -241,11 +258,41 @@ export function Quiz(props: {
           </div>
           <p className="muted small">Mixed formats — multiple choice, true/false, select-all, and a few written answers.</p>
           {!engineReady && <p className="banner danger">Your AI ({engine?.label}) isn’t reachable right now.</p>}
-          <button className="btn primary quiz-start" disabled={!engineReady || busy} onClick={start}>
-            {busy ? 'Building your quiz…' : 'Start quiz'}
-          </button>
+          <div className="quiz-start-row">
+            <button className="btn primary quiz-start" disabled={!engineReady || busy} onClick={() => start()}>
+              {busy && !reviewing ? 'Building your quiz…' : 'Start quiz'}
+            </button>
+            {weak.length > 0 && (
+              <button
+                className="btn quiz-review"
+                disabled={!engineReady || busy}
+                onClick={() => start(weak.map((w) => w.topic))}
+                title="A quiz focused on the lessons you’ve been getting wrong"
+              >
+                <Repeat size={15} /> {busy && reviewing ? 'Building review…' : `Review ${weak.length} weak ${weak.length === 1 ? 'spot' : 'spots'}`}
+              </button>
+            )}
+          </div>
           {error && <p className="banner danger">{error}</p>}
         </section>
+
+        {weak.length > 0 && (
+          <section className="quiz-weak">
+            <div className="recents-label">
+              <Target size={13} style={{ verticalAlign: '-2px', marginRight: 5, color: '#c96f3c' }} />
+              Focus areas
+            </div>
+            <ul className="weak-list">
+              {weak.map((w) => (
+                <li key={`${w.courseCode}:${w.topic}`} className="weak-item">
+                  <span className="weak-topic">{w.topic}</span>
+                  {w.courseCode && <span className="weak-course">{w.courseCode}</span>}
+                  <span className="weak-acc">{Math.round(w.accuracy * 100)}%</span>
+                </li>
+              ))}
+            </ul>
+          </section>
+        )}
 
         {stats && stats.recent.length > 0 && (
           <section className="quiz-history">
@@ -318,6 +365,11 @@ export function Quiz(props: {
   return (
     <div className="surface quiz">
       <div className="quiz-progress">
+        {reviewing && (
+          <span className="review-chip">
+            <Repeat size={12} /> Review
+          </span>
+        )}
         Question {idx + 1} of {questions.length}
       </div>
       {q && (
