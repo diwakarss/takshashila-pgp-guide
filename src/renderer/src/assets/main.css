@@ -2611,3 +2611,19 @@ code {
   gap: 12px;
   margin-bottom: 14px;
 }
+
+/* step "done when" line — the visible target for each step */
+.proj-stepguide-done {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  margin: 8px 0 0;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--success);
+}
+.proj-stepguide-done svg {
+  flex: none;
+  position: relative;
+  top: 2px;
+}

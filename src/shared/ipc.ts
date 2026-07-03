@@ -319,14 +319,15 @@ export type AddSnippetRequest = {
 export type ProjectKind = 'assignment' | 'capstone' | 'personal'
 
 // Bardach's 8-step policy analysis: each step carries a plain-language guide
-// (what the student should actually DO) and a Takshashila India-lens hint.
-// Static UI + prompt content shared by main (coach prompts) and renderer.
+// (what to DO), an explicit "done" (what the step's output looks like — shown
+// in the UI and used by the coach to converge), and a Takshashila India lens.
 export const BARDACH_STEPS = [
   {
     key: 'define',
     title: 'Define the problem',
     guide:
       'Write ONE sharp, provisional sentence: what’s wrong, for whom, and roughly how big. Rough estimates are fine here — this is the hypothesis that aims your research; step 2 is where you verify it. Not "energy prices are affected" but "diesel prices seem to have risen sharply, squeezing Indian freight".',
+    done: 'your takeaway box holds one sentence naming the problem, who it hits, and a rough size (placeholders to verify in step 2 are fine)',
     lens: 'Is this a state-capacity problem?'
   },
   {
@@ -334,6 +335,7 @@ export const BARDACH_STEPS = [
     title: 'Assemble evidence',
     guide:
       'Now prove it — or correct it. Gather the data and sources that verify the magnitudes you assumed in step 1, trace the causes, and stock up citable evidence for the later steps. If the evidence contradicts your definition, go back and sharpen it — that’s the method working.',
+    done: 'the key numbers in your definition are verified (or corrected) and your evidence list holds the sources you’ll cite',
     lens: 'What does the data actually say?'
   },
   {
@@ -341,6 +343,7 @@ export const BARDACH_STEPS = [
     title: 'Construct alternatives',
     guide:
       'List 3–4 realistic courses of action (or, for an explainer: the markets/angles you could analyse). Always include "let present trends continue" as the baseline to compare against.',
+    done: 'your takeaway lists the 3–4 options/angles you’ll weigh, including the do-nothing baseline',
     lens: 'Union / State / Concurrent?'
   },
   {
@@ -348,6 +351,7 @@ export const BARDACH_STEPS = [
     title: 'Select criteria',
     guide:
       'Decide how you’ll judge the alternatives — e.g. effectiveness, cost, equity, feasibility. Write them down; they’re what makes your analysis an argument instead of an opinion.',
+    done: 'your takeaway names the 2–3 criteria you’ll judge the alternatives by',
     lens: 'Better-or-worse, not good-or-bad'
   },
   {
@@ -355,6 +359,7 @@ export const BARDACH_STEPS = [
     title: 'Project the outcomes',
     guide:
       'For each alternative, predict what would actually happen — with magnitudes and mechanisms (who responds, how, why). This is the hardest and most honest step; don’t skip the uncomfortable numbers.',
+    done: 'your takeaway states the expected outcome of each alternative, with the mechanism behind it',
     lens: 'All sectors can fail'
   },
   {
@@ -362,6 +367,7 @@ export const BARDACH_STEPS = [
     title: 'Confront the trade-offs',
     guide:
       'No option wins on every criterion. Spell out what you gain and what you give up between the front-runners — who benefits, who bears the cost.',
+    done: 'your takeaway names the trade-off you’re accepting between the front-runners, and why',
     lens: 'Who bears the cost?'
   },
   {
@@ -369,6 +375,7 @@ export const BARDACH_STEPS = [
     title: 'Decide',
     guide:
       'Commit to a position. Test it: could you defend it to a sceptic using only the evidence you assembled in step 2? If not, go back.',
+    done: 'your takeaway states your decision in one sentence you could defend to a sceptic',
     lens: 'Defensible on the evidence?'
   },
   {
@@ -376,6 +383,7 @@ export const BARDACH_STEPS = [
     title: 'Tell your story',
     guide:
       'Turn the analysis into a clear narrative for your audience — for this deliverable, your script or draft. Lead with the answer, then the mechanism, then the evidence. Plain words beat jargon.',
+    done: 'a version of your draft is saved and marked final',
     lens: 'Clear to a non-expert?'
   }
 ] as const

@@ -440,6 +440,9 @@ function Editor({ id, engine, onChanged }: { id: string; engine: EngineStatus | 
               <span className="proj-lens-chip">India lens · {stepDef.lens}</span>
             </div>
             <p className="proj-stepguide-text">{stepDef.guide}</p>
+            <p className="proj-stepguide-done">
+              <Check size={13} /> Done when {stepDef.done}.
+            </p>
           </section>
 
           {isEvidenceStep && (

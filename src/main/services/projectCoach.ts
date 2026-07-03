@@ -85,9 +85,12 @@ type StepChatSpec = { kickoff: string; web: boolean }
 
 const STEP_CHAT: Record<string, StepChatSpec> = {
   define: {
-    web: true,
+    // Follow-up turns deliberately have NO web access: step 1 is about framing,
+    // and a web-armed coach drifts into sending the student data-hunting (step
+    // 2's job). The kickoff still researches (history-empty turns get web).
+    web: false,
     kickoff:
-      'Research the assignment topic on the web FIRST. Open with a short, cited landscape of the situation (4-6 bullets, concrete figures where you can find them). Then ask the student 2-3 sharp questions that will help THEM define the problem precisely — what exactly, for whom, how big, measured how.'
+      'Research the assignment topic on the web FIRST. Open with a short, cited landscape of the situation (4-6 bullets, concrete figures where you can find them — this saves the student the legwork). Then ask the student 2-3 sharp questions that help THEM pick and frame ONE problem — what exactly, for whom, roughly how big. Rough estimates and placeholders are fine at this step; do NOT ask them to go find data (that is step 2).'
   },
   evidence: {
     web: true,
@@ -146,6 +149,16 @@ function stepContext(p: Project, step: number): string {
   if (p.draft.trim()) parts.push(`Their current working draft (THEIR words):\n"""\n${truncate(p.draft, 3000)}\n"""`)
   const cur = BARDACH_STEPS[step]
   parts.push(`Current step: ${step + 1}. ${cur.title} — guide: ${cur.guide} — India lens: ${cur.lens}`)
+  parts.push(
+    [
+      `THIS STEP IS DONE WHEN: ${cur.done}.`,
+      'Coaching discipline — converge, do not sprawl:',
+      '- Drive every turn toward that output and nothing else. One thread at a time; do not open new angles once the student is close.',
+      '- Work that belongs to a LATER step (hunting/verifying data → step 2; generating options → step 3; drafting prose → step 8) must be PARKED, not pursued: say "that\'s step N work — park it" and return to this step\'s output. Never send the student off to research mid-step.',
+      '- Rough placeholders are acceptable wherever a later step will fill them in.',
+      '- The moment the student\'s messages contain the step\'s output, SAY SO: tell them to write it in the takeaway box and press "Mark step complete" — then stop coaching this step.'
+    ].join('\n')
+  )
   return parts.join('\n\n')
 }
 

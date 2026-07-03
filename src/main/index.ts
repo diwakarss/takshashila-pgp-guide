@@ -316,37 +316,38 @@ app.whenReady().then(() => {
     })().catch((e) => console.error('[nb] failed:', e))
   }
 
-  // Verify the projects scaffold end-to-end (self-cleaning; coach optional).
+  // Verify the projects scaffold end-to-end. Uses a THROWAWAY personal project —
+  // never the real catalog projects, which may hold the student's actual work.
   if (process.env['PGP_DEV_PROJECTS']) {
     void (async () => {
       const ov = await studyBrain.projectsOverview()
       console.log('[proj] overview:', JSON.stringify({ assignments: ov.assignments.map((a) => a.title), capstone: ov.capstone?.title, personal: ov.personal.length }))
-      const p = await studyBrain.openProject('pp231-iran-demand-supply')
-      console.log(`[proj] opened "${p?.title}" step=${p?.step} deliverable="${p?.deliverable}"`)
-      await studyBrain.updateProject(p!.id, { draft: 'Oil prices rose; demand for EVs shifted right.', step: 1, done: [0] })
-      const ov2 = await studyBrain.projectsOverview()
-      console.log('[proj] after update, assignment started/progress:', JSON.stringify(ov2.assignments.map((a) => ({ s: a.started, p: Math.round(a.progress * 100) }))))
+      const p = await studyBrain.createPersonalProject('DEV harness test (safe to delete)')
+      console.log(`[proj] created test project "${p.title}" step=${p.step}`)
+      await studyBrain.updateProject(p.id, { draft: 'Oil prices rose; demand for EVs shifted right.', step: 1, done: [0] })
       if (process.env['PGP_DEV_PROJECT_COACH']) {
         // Guided flow: kickoff chat on step 0 (coach researches + opens)…
-        let cp = await studyBrain.projectChat(p!.id, 0)
+        let cp = await studyBrain.projectChat(p.id, 0)
         const kick = cp?.stepData['0']?.messages ?? []
         console.log(`[proj] chat kickoff → ${kick.length} msgs; coach opens:`, kick[kick.length - 1]?.text.slice(0, 180))
-        // …a takeaway note that must carry into the next step's context…
-        await studyBrain.updateProject(p!.id, {
-          stepData: { ...cp!.stepData, '0': { ...cp!.stepData['0'], notes: 'Focus: diesel + fertiliser markets in India.' } }
-        })
-        cp = await studyBrain.projectChat(p!.id, 1, 'What sources should I start with?')
-        const ev = cp?.stepData['1']?.messages ?? []
-        console.log(`[proj] step-2 chat → ${ev.length} msgs; reply:`, ev[ev.length - 1]?.text.slice(0, 180))
+        // Convergence check: the student offers a definition — the coach should
+        // close the step (takeaway + mark complete), NOT send them data-hunting.
+        cp = await studyBrain.projectChat(
+          p.id,
+          0,
+          'Here is my definition: India imports nearly all its helium, mostly via Qatar, and the strait closure puts MRI scanners and chip fabs at risk — say a 30-40% supply squeeze. Good enough to move on?'
+        )
+        const st0 = cp?.stepData['0']?.messages ?? []
+        console.log(`[proj] step-1 convergence reply:`, st0[st0.length - 1]?.text.slice(0, 400))
       }
       // Draft versions: save two, mark the second final.
-      await studyBrain.updateProject(p!.id, { draft: 'v1 script text' })
-      await studyBrain.saveDraftVersion(p!.id, 'First cut')
-      await studyBrain.updateProject(p!.id, { draft: 'v2 tighter script' })
-      const withFinal = await studyBrain.saveDraftVersion(p!.id, 'Tighter', true)
+      await studyBrain.updateProject(p.id, { draft: 'v1 script text' })
+      await studyBrain.saveDraftVersion(p.id, 'First cut')
+      await studyBrain.updateProject(p.id, { draft: 'v2 tighter script' })
+      const withFinal = await studyBrain.saveDraftVersion(p.id, 'Tighter', true)
       console.log('[proj] drafts:', JSON.stringify(withFinal?.drafts.map((d) => ({ t: d.title, f: d.final }))))
-      await studyBrain.deleteProject(p!.id)
-      console.log('[proj] cleaned up')
+      await studyBrain.deleteProject(p.id)
+      console.log('[proj] cleaned up (test project only)')
     })().catch((e) => console.error('[proj] failed:', e))
   }
 
