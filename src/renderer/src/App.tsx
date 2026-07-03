@@ -1,10 +1,11 @@
 import { useEffect, useState } from 'react'
-import { NotebookPen, FileText } from 'lucide-react'
+import { FileText } from 'lucide-react'
 import { Sidebar } from './components/Sidebar'
 import { TopBar } from './components/TopBar'
 import { Tutor } from './tabs/Tutor'
 import { Quiz } from './tabs/Quiz'
 import { Research } from './tabs/Research'
+import { Notebook } from './tabs/Notebook'
 import { Settings } from './tabs/Settings'
 import { Placeholder } from './tabs/Placeholder'
 import { useSystemStatus } from './hooks/useSystemStatus'
@@ -20,6 +21,7 @@ export function App(): JSX.Element {
   const [openResearchId, setOpenResearchId] = useState<string | null>(null)
   const [threadsVersion, setThreadsVersion] = useState(0)
   const [quizStatsVersion, setQuizStatsVersion] = useState(0)
+  const [notebookVersion, setNotebookVersion] = useState(0)
   const [courses, setCourses] = useState<CourseSummary[]>([])
   const [course, setCourse] = useState<string>('')
 
@@ -91,17 +93,11 @@ export function App(): JSX.Element {
               openThreadId={openResearchId}
               onOpenThread={setOpenResearchId}
               onThreadsChanged={threadsChanged}
+              onCaptured={() => setNotebookVersion((v) => v + 1)}
               onGoToSettings={() => setTab('settings')}
             />
           )}
-          {tab === 'notebook' && (
-            <Placeholder
-              title="Notebook"
-              line="Your pages of notes, each carrying its sources — the thread between research and your projects."
-              icon={NotebookPen}
-              accent="#5c6675"
-            />
-          )}
+          {tab === 'notebook' && <Notebook version={notebookVersion} />}
           {tab === 'projects' && (
             <Placeholder
               title="Projects"

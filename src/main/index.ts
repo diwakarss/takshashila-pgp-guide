@@ -7,6 +7,7 @@ import { agentCliEngine } from './engine/agentCli'
 import { imageEngine } from './illustrate/imageEngine'
 import { extractConcepts } from './illustrate/extract'
 import type {
+  AddSnippetRequest,
   AskRequest,
   IllustrationImage,
   IllustrationSpec,
@@ -161,6 +162,15 @@ function registerIpc(): void {
   ipcMain.handle(IPC.tutorAsk, (_e, req: AskRequest) => studyBrain.ask(req))
   ipcMain.handle(IPC.researchAsk, (_e, req: ResearchRequest) => studyBrain.research(req))
   ipcMain.handle(IPC.researchLens, (_e, req: LensRequest) => studyBrain.researchLens(req))
+
+  ipcMain.handle(IPC.notebookList, (_e, query?: string) => studyBrain.listNotebook(query))
+  ipcMain.handle(IPC.notebookGet, (_e, id: string) => studyBrain.getNotebookPage(id))
+  ipcMain.handle(IPC.notebookCreate, (_e, title?: string) => studyBrain.createNotebookPage(title))
+  ipcMain.handle(IPC.notebookUpdate, (_e, req: { id: string; title: string; body: string }) =>
+    studyBrain.updateNotebookPage(req.id, { title: req.title, body: req.body })
+  )
+  ipcMain.handle(IPC.notebookAddSnippet, (_e, req: AddSnippetRequest) => studyBrain.addSnippet(req))
+  ipcMain.handle(IPC.notebookDelete, (_e, id: string) => studyBrain.deleteNotebookPage(id))
   ipcMain.handle(IPC.threadsList, (_e, tab?: string) => studyBrain.listThreads(tab))
   ipcMain.handle(IPC.threadGet, (_e, id: string) => studyBrain.getThread(id))
   ipcMain.handle(IPC.threadDelete, (_e, id: string) => studyBrain.deleteThread(id))
@@ -195,6 +205,30 @@ app.whenReady().then(() => {
 
   if (process.env['PGP_DEV_BUILD_LIBRARY']) {
     void buildLibrary().catch((e) => console.error('[lib] build failed:', e))
+  }
+
+  // Verify the notebook capture path end-to-end, self-cleaning.
+  if (process.env['PGP_DEV_NOTEBOOK']) {
+    void (async () => {
+      const p = await studyBrain.addSnippet({
+        newTitle: 'Fiscal deficit',
+        text: 'India’s FY26 fiscal deficit target is 4.4% of GDP.',
+        sources: [{ title: 'Union Budget 2025-26', url: 'https://www.indiabudget.gov.in/', kind: 'government' }],
+        from: 'Research: fiscal deficit'
+      })
+      console.log(`[nb] created page "${p?.title}" with ${p?.snippets.length} snippet(s)`)
+      await studyBrain.addSnippet({
+        pageId: p?.id,
+        text: 'The FRBM Act sets the fiscal framework.',
+        sources: [{ title: 'FRBM Act', url: 'https://ies.gov.in/frbm', kind: 'government' }],
+        from: 'Research: fiscal deficit'
+      })
+      const full = p ? await studyBrain.getNotebookPage(p.id) : null
+      console.log(`[nb] page now has ${full?.snippets.length} snippets; list search '4.4%':`,
+        JSON.stringify((await studyBrain.listNotebook('4.4%')).map((s) => s.title)))
+      if (p) await studyBrain.deleteNotebookPage(p.id)
+      console.log(`[nb] cleaned up → ${(await studyBrain.listNotebook()).length} pages`)
+    })().catch((e) => console.error('[nb] failed:', e))
   }
 
   // Verify web research end-to-end: PGP_DEV_RESEARCH="a question".

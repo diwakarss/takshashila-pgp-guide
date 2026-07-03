@@ -1,7 +1,22 @@
-import { useEffect, useRef, useState } from 'react'
-import { Search, ExternalLink, Users, Scale, Table2, Clock } from 'lucide-react'
+import { useEffect, useRef, useState, type MouseEvent as ReactMouseEvent } from 'react'
+import { Search, ExternalLink, Users, Scale, Table2, Clock, BookmarkPlus } from 'lucide-react'
 import { Md, toSuperscriptCitations } from '../components/Markdown'
-import type { EngineStatus, LensKind, LensReply, ResearchSource, SourceType, ThreadDetail, Turn } from '../../../shared/ipc'
+import type {
+  EngineStatus,
+  LensKind,
+  LensReply,
+  NotebookPageSummary,
+  NoteSource,
+  ResearchSource,
+  SourceType,
+  ThreadDetail,
+  Turn
+} from '../../../shared/ipc'
+
+type Capture = { text: string; sources: NoteSource[]; from: string }
+
+const toNoteSources = (sources: ResearchSource[]): NoteSource[] =>
+  sources.map((s) => ({ title: s.title, url: s.url, kind: s.type }))
 
 const LENS_BAR: { kind: LensKind; label: string; icon: typeof Users }[] = [
   { kind: 'stakeholders', label: 'Stakeholder map', icon: Users },
@@ -20,9 +35,10 @@ export function Research(props: {
   openThreadId: string | null
   onOpenThread: (id: string | null) => void
   onThreadsChanged: () => void
+  onCaptured: () => void
   onGoToSettings: () => void
 }): JSX.Element {
-  const { ready, engine, openThreadId, onOpenThread, onThreadsChanged, onGoToSettings } = props
+  const { ready, engine, openThreadId, onOpenThread, onThreadsChanged, onCaptured, onGoToSettings } = props
   const [thread, setThread] = useState<ThreadDetail | null>(null)
   const [q, setQ] = useState('')
   const [busy, setBusy] = useState(false)
@@ -30,6 +46,41 @@ export function Research(props: {
   const [pendingLens, setPendingLens] = useState<{ label: string } | null>(null)
   const [error, setError] = useState<string | null>(null)
   const scrollRef = useRef<HTMLDivElement>(null)
+
+  // Highlight → Notebook capture: a floating pill at the selection, then a page picker.
+  const [pill, setPill] = useState<{ capture: Capture; x: number; y: number } | null>(null)
+  const [picker, setPicker] = useState<Capture | null>(null)
+  const [pages, setPages] = useState<NotebookPageSummary[]>([])
+  const [pickPage, setPickPage] = useState<string>('') // '' = new page
+  const [newTitle, setNewTitle] = useState('')
+  const [toast, setToast] = useState<string | null>(null)
+
+  const onCapture = (capture: Capture, x: number, y: number): void => setPill({ capture, x, y })
+
+  const openPicker = (): void => {
+    if (!pill) return
+    setPicker(pill.capture)
+    setPill(null)
+    setPickPage('')
+    setNewTitle('')
+    void window.pgp.notebookList().then(setPages)
+    window.getSelection()?.removeAllRanges()
+  }
+
+  const saveSnippet = async (): Promise<void> => {
+    if (!picker) return
+    const page = await window.pgp.addSnippet({
+      pageId: pickPage || undefined,
+      newTitle: pickPage ? undefined : newTitle,
+      text: picker.text,
+      sources: picker.sources,
+      from: picker.from
+    })
+    setPicker(null)
+    onCaptured()
+    setToast(`Saved to “${page?.title ?? 'page'}”`)
+    setTimeout(() => setToast(null), 2600)
+  }
 
   useEffect(() => {
     if (openThreadId == null) {
@@ -104,7 +155,7 @@ export function Research(props: {
 
   return (
     <div className="tutor research">
-      <div className="thread-scroll" ref={scrollRef}>
+      <div className="thread-scroll" ref={scrollRef} onMouseDown={() => setPill(null)}>
         {turns.length === 0 && !busy && (
           <div className="thread-welcome">
             <h2>Research any topic</h2>
@@ -127,7 +178,7 @@ export function Research(props: {
         )}
 
         {turns.map((turn) => (
-          <ResearchTurnView key={turn.id} turn={turn} busy={busy} onLens={runLens} />
+          <ResearchTurnView key={turn.id} turn={turn} busy={busy} onLens={runLens} onCapture={onCapture} />
         ))}
 
         {pending && (
@@ -171,25 +222,87 @@ export function Research(props: {
           {busy ? '…' : 'Research'}
         </button>
       </div>
+
+      {pill && (
+        <button
+          className="capture-pill"
+          style={{ left: pill.x, top: pill.y }}
+          onMouseDown={(e) => e.stopPropagation()}
+          onClick={openPicker}
+        >
+          <BookmarkPlus size={14} /> Add to Notebook
+        </button>
+      )}
+
+      {picker && (
+        <div className="capture-overlay" onMouseDown={() => setPicker(null)}>
+          <div className="capture-panel" onMouseDown={(e) => e.stopPropagation()}>
+            <div className="capture-head">Add to Notebook</div>
+            <blockquote className="capture-quote">{picker.text}</blockquote>
+            <label className="capture-field">
+              <span className="course-select-label">Page</span>
+              <select value={pickPage} onChange={(e) => setPickPage(e.target.value)}>
+                <option value="">➕ New page…</option>
+                {pages.map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.title}
+                  </option>
+                ))}
+              </select>
+            </label>
+            {!pickPage && (
+              <input
+                className="input capture-title"
+                placeholder="New page title (optional)"
+                value={newTitle}
+                onChange={(e) => setNewTitle(e.target.value)}
+              />
+            )}
+            <div className="capture-actions">
+              <button className="btn" onClick={() => setPicker(null)}>
+                Cancel
+              </button>
+              <button className="btn primary" onClick={saveSnippet}>
+                Save
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {toast && <div className="toast">{toast}</div>}
     </div>
   )
 }
+
+// Turn a text selection inside an answer into a capture, keyed to that answer's sources.
+function selectionCapture(sources: NoteSource[], from: string, onCapture: CaptureFn): (e: ReactMouseEvent) => void {
+  return (e) => {
+    const text = window.getSelection()?.toString().trim() ?? ''
+    if (text.length < 3) return
+    onCapture({ text, sources, from }, e.clientX, e.clientY)
+  }
+}
+
+type CaptureFn = (capture: Capture, x: number, y: number) => void
 
 function ResearchTurnView(props: {
   turn: Turn
   busy: boolean
   onLens: (question: string, lens: LensKind, context: string) => void
+  onCapture: CaptureFn
 }): JSX.Element {
-  const { turn, busy, onLens } = props
+  const { turn, busy, onLens, onCapture } = props
   const a = turn.answer
 
-  if (a.kind === 'lens') return <LensView lens={a} />
+  if (a.kind === 'lens') return <LensView lens={a} onCapture={onCapture} />
 
   if (a.kind !== 'research') return <></>
+  const from = `Research: ${turn.question}`
   return (
     <div className="turn">
       <div className="turn-q">{turn.question}</div>
-      <div className="turn-a">
+      <div className="turn-a" onMouseUp={selectionCapture(toNoteSources(a.sources), from, onCapture)}>
         <div className="answer-md">
           <Md>{toSuperscriptCitations(a.synthesis)}</Md>
         </div>
@@ -213,10 +326,10 @@ function ResearchTurnView(props: {
   )
 }
 
-function LensView({ lens }: { lens: LensReply }): JSX.Element {
+function LensView({ lens, onCapture }: { lens: LensReply; onCapture: CaptureFn }): JSX.Element {
   return (
     <div className="turn">
-      <div className="turn-a">
+      <div className="turn-a" onMouseUp={selectionCapture(toNoteSources(lens.sources), lens.title, onCapture)}>
         <div className="lens-card">
           <div className="lens-head">{lens.title}</div>
           {lens.intro && (

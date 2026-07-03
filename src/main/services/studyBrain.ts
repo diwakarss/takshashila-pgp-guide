@@ -28,6 +28,9 @@ import type {
   QuizStats,
   QuizVerdict,
   LensRequest,
+  AddSnippetRequest,
+  NotebookPage,
+  NotebookPageSummary,
   SearchHit,
   Thread,
   ThreadDetail,
@@ -198,6 +201,52 @@ class StudyBrainService {
       answer: reply
     })
     return { threadId: req.threadId, turn }
+  }
+
+  // ── notebook ──────────────────────────────────────────────────────────
+
+  async listNotebook(query?: string): Promise<NotebookPageSummary[]> {
+    const brain = await this.open()
+    return brain.listNotebookPages(query)
+  }
+
+  async getNotebookPage(id: string): Promise<NotebookPage | null> {
+    const brain = await this.open()
+    return brain.getNotebookPage(id)
+  }
+
+  async createNotebookPage(title?: string): Promise<NotebookPage> {
+    const brain = await this.open()
+    return brain.createNotebookPage({ id: randomUUID(), title: (title ?? '').trim() || 'Untitled page' })
+  }
+
+  async updateNotebookPage(id: string, fields: { title: string; body: string }): Promise<NotebookPage | null> {
+    const brain = await this.open()
+    return brain.updateNotebookPage(id, { title: fields.title.trim() || 'Untitled page', body: fields.body })
+  }
+
+  async deleteNotebookPage(id: string): Promise<void> {
+    const brain = await this.open()
+    await brain.deleteNotebookPage(id)
+  }
+
+  /** Capture a highlight into an existing page, or a new one when newTitle is
+   *  given. Returns the page the snippet landed on. */
+  async addSnippet(req: AddSnippetRequest): Promise<NotebookPage | null> {
+    const brain = await this.open()
+    let pageId = req.pageId
+    if (!pageId) {
+      const title = (req.newTitle ?? '').trim() || makeTitle(req.text)
+      const page = await brain.createNotebookPage({ id: randomUUID(), title })
+      pageId = page.id
+    }
+    return brain.appendSnippet(pageId, {
+      id: randomUUID(),
+      text: req.text.trim(),
+      sources: req.sources,
+      from: req.from,
+      createdAt: new Date().toISOString()
+    })
   }
 
   async listThreads(tab = 'tutor'): Promise<Thread[]> {

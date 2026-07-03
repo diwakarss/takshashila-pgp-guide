@@ -99,6 +99,20 @@ CREATE TABLE IF NOT EXISTS topic_reviews (
 );
 CREATE INDEX IF NOT EXISTS topic_reviews_topic_idx ON topic_reviews (topic);
 
+-- Notebook: the student's own titled note pages (private, never uploaded). Each
+-- page has free-form notes (body) plus captured snippets (highlights carried in
+-- from Research/Tutor) as a JSONB array, each snippet keeping its source(s) so
+-- the page can render a bibliography and later feed Projects.
+CREATE TABLE IF NOT EXISTS notebook_pages (
+  id         TEXT PRIMARY KEY,
+  title      TEXT NOT NULL,
+  body       TEXT NOT NULL DEFAULT '',
+  snippets   JSONB NOT NULL DEFAULT '[]',
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS notebook_updated_idx ON notebook_pages (updated_at DESC);
+
 -- Illustration library: one row per drawn concept. Matched by embedding so a
 -- concept is drawn ONCE and reused across questions/phrasings (no per-answer
 -- regeneration). Ships with the corpus so students get illustrations for free.

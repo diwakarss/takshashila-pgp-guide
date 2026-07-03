@@ -1,7 +1,17 @@
 import { PGlite } from '@electric-sql/pglite'
 import { vector } from '@electric-sql/pglite/vector'
 import { SCHEMA_SQL, EMBED_DIM } from './schema'
-import type { QuizAttempt, Thread, ThreadAnswer, ThreadDetail, Turn, WeakSpot } from '../../shared/ipc'
+import type {
+  NoteSnippet,
+  NotebookPage,
+  NotebookPageSummary,
+  QuizAttempt,
+  Thread,
+  ThreadAnswer,
+  ThreadDetail,
+  Turn,
+  WeakSpot
+} from '../../shared/ipc'
 
 export type Source = 'corpus' | 'private'
 
@@ -336,6 +346,84 @@ export class Brain {
   async clearQuizAttempts(): Promise<void> {
     await this.db.query(`DELETE FROM quiz_attempts`)
     await this.db.query(`DELETE FROM topic_reviews`)
+  }
+
+  // ── notebook pages (private; never uploaded) ────────────────────────────
+
+  private parseSnippets(raw: unknown): NoteSnippet[] {
+    const arr = typeof raw === 'string' ? JSON.parse(raw) : raw
+    return Array.isArray(arr) ? (arr as NoteSnippet[]) : []
+  }
+
+  /** Pages (metadata only) matching an optional query over title/body/snippets. */
+  async listNotebookPages(query?: string): Promise<NotebookPageSummary[]> {
+    const params: unknown[] = []
+    let where = ''
+    if (query && query.trim()) {
+      params.push(`%${query.trim()}%`)
+      where = `WHERE title ILIKE $1 OR body ILIKE $1 OR snippets::text ILIKE $1`
+    }
+    const r = await this.db.query<{ id: string; title: string; snippets: unknown; updated_at: string }>(
+      `SELECT id, title, snippets, updated_at FROM notebook_pages ${where} ORDER BY updated_at DESC`,
+      params
+    )
+    return r.rows.map((p) => ({
+      id: p.id,
+      title: p.title,
+      snippets: this.parseSnippets(p.snippets).length,
+      updatedAt: String(p.updated_at)
+    }))
+  }
+
+  async getNotebookPage(id: string): Promise<NotebookPage | null> {
+    const r = await this.db.query<{
+      id: string
+      title: string
+      body: string
+      snippets: unknown
+      created_at: string
+      updated_at: string
+    }>(`SELECT * FROM notebook_pages WHERE id = $1`, [id])
+    const p = r.rows[0]
+    if (!p) return null
+    return {
+      id: p.id,
+      title: p.title,
+      body: p.body,
+      snippets: this.parseSnippets(p.snippets),
+      createdAt: String(p.created_at),
+      updatedAt: String(p.updated_at)
+    }
+  }
+
+  async createNotebookPage(page: { id: string; title: string }): Promise<NotebookPage> {
+    await this.db.query(`INSERT INTO notebook_pages (id, title) VALUES ($1, $2)`, [page.id, page.title])
+    return (await this.getNotebookPage(page.id)) as NotebookPage
+  }
+
+  async updateNotebookPage(id: string, fields: { title: string; body: string }): Promise<NotebookPage | null> {
+    await this.db.query(`UPDATE notebook_pages SET title = $2, body = $3, updated_at = now() WHERE id = $1`, [
+      id,
+      fields.title,
+      fields.body
+    ])
+    return this.getNotebookPage(id)
+  }
+
+  /** Append a captured snippet to a page (snippet id supplied by the caller). */
+  async appendSnippet(pageId: string, snippet: NoteSnippet): Promise<NotebookPage | null> {
+    const page = await this.getNotebookPage(pageId)
+    if (!page) return null
+    const snippets = [...page.snippets, snippet]
+    await this.db.query(`UPDATE notebook_pages SET snippets = $2, updated_at = now() WHERE id = $1`, [
+      pageId,
+      JSON.stringify(snippets)
+    ])
+    return this.getNotebookPage(pageId)
+  }
+
+  async deleteNotebookPage(id: string): Promise<void> {
+    await this.db.query(`DELETE FROM notebook_pages WHERE id = $1`, [id])
   }
 
   // ── conversation threads (private; never uploaded) ──────────────────────

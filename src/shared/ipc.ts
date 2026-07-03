@@ -33,6 +33,13 @@ export const IPC = {
   researchAsk: 'research:ask',
   /** Generate a structured policy lens (stakeholder map / two sides / evidence / timeline). */
   researchLens: 'research:lens',
+  /** Notebook: list/search pages, load one, create, edit, capture a snippet, delete. */
+  notebookList: 'notebook:list',
+  notebookGet: 'notebook:get',
+  notebookCreate: 'notebook:create',
+  notebookUpdate: 'notebook:update',
+  notebookAddSnippet: 'notebook:add',
+  notebookDelete: 'notebook:delete',
   /** List saved conversation threads for a tab (Recents). */
   threadsList: 'threads:list',
   /** Load a full thread with its turns. */
@@ -256,6 +263,33 @@ export type QuizStats = {
   bestStreak: number
   recent: QuizAttempt[] // most-recent first
   byCourse: CourseAccuracy[]
+}
+
+// ── notebook (the connective tissue: Research → Notebook → Projects) ───────
+// A carried source keeps enough to render a bibliography entry + link back.
+export type NoteSource = { title: string; url?: string; kind: string } // kind: SourceType | 'research' | 'corpus'
+
+// A captured highlight, with the sources it references and where it came from.
+export type NoteSnippet = { id: string; text: string; sources: NoteSource[]; from: string; createdAt: string }
+
+export type NotebookPage = {
+  id: string
+  title: string
+  body: string // the student's own notes (markdown), editable
+  snippets: NoteSnippet[]
+  createdAt: string
+  updatedAt: string
+}
+
+export type NotebookPageSummary = { id: string; title: string; snippets: number; updatedAt: string }
+
+/** Capture a highlight: into an existing page (pageId) or a new one (newTitle). */
+export type AddSnippetRequest = {
+  pageId?: string
+  newTitle?: string
+  text: string
+  sources: NoteSource[]
+  from: string
 }
 
 /** Either a generated image (dataUrl) or a reason it couldn't be made. */

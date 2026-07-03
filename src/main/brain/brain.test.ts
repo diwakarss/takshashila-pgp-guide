@@ -103,6 +103,34 @@ describe('Brain (PGLite + pgvector)', () => {
     await fresh.close()
   })
 
+  it('notebook: create, capture snippets, search, and read back the bibliography', async () => {
+    const page = await brain.createNotebookPage({ id: 'p1', title: 'Fiscal policy' })
+    expect(page.title).toBe('Fiscal policy')
+    expect(page.snippets).toEqual([])
+
+    await brain.appendSnippet('p1', {
+      id: 's1',
+      text: 'The deficit target is 4.4%.',
+      sources: [{ title: 'Union Budget', url: 'https://indiabudget.gov.in', kind: 'government' }],
+      from: 'Research: fiscal deficit',
+      createdAt: '2026-07-03T00:00:00Z'
+    })
+    const got = await brain.getNotebookPage('p1')
+    expect(got?.snippets).toHaveLength(1)
+    expect(got?.snippets[0].sources[0].kind).toBe('government')
+
+    // Search matches title, body, and snippet text/source.
+    expect((await brain.listNotebookPages('4.4%')).map((p) => p.id)).toEqual(['p1'])
+    expect((await brain.listNotebookPages('Union Budget')).map((p) => p.id)).toEqual(['p1'])
+    expect(await brain.listNotebookPages('nonexistent term')).toEqual([])
+
+    // Edit + delete.
+    await brain.updateNotebookPage('p1', { title: 'Fiscal deficit', body: 'my notes' })
+    expect((await brain.getNotebookPage('p1'))?.title).toBe('Fiscal deficit')
+    await brain.deleteNotebookPage('p1')
+    expect(await brain.getNotebookPage('p1')).toBeNull()
+  })
+
   it('rejects embeddings of the wrong dimension', async () => {
     await expect(
       brain.corpusWriter.upsertPage({ slug: 'bad' }, [{ ordinal: 0, text: 'x', embedding: [1, 2, 3] }])
