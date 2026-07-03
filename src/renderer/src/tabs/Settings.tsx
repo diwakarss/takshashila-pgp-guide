@@ -1,14 +1,27 @@
 import { useEffect, useState } from 'react'
-import type { AppInfo, ImportProgress } from '../../../shared/ipc'
+import type { AppInfo, AppSettings, ImportProgress } from '../../../shared/ipc'
 import type { SystemStatus } from '../hooks/useSystemStatus'
 
-// Settings — engine, course library (import/status), privacy, about.
+// Settings — your AI, course library, privacy, setup, about.
 export function Settings(props: { status: SystemStatus }): JSX.Element {
   const { status } = props
   const [info, setInfo] = useState<AppInfo | null>(null)
+  const [settings, setSettings] = useState<AppSettings | null>(null)
   useEffect(() => {
     void window.pgp.appInfo().then(setInfo)
+    void window.pgp.getSettings().then(setSettings)
   }, [])
+
+  const toggleMetrics = (): void => {
+    if (!settings) return
+    const next = !settings.metrics
+    setSettings({ ...settings, metrics: next })
+    void window.pgp.setSettings({ metrics: next })
+  }
+
+  const replaySetup = (): void => {
+    void window.pgp.setSettings({ onboarded: false }).then(() => location.reload())
+  }
 
   return (
     <div className="surface">
@@ -33,8 +46,8 @@ export function Settings(props: { status: SystemStatus }): JSX.Element {
           </span>
         </div>
         <p className="muted small">
-          Phase 1 uses your Claude subscription via the Claude CLI. Choosing between subscription, API
-          key, and a local model comes with the setup wizard.
+          PGP Guide runs on your own Claude plan through the Claude Code CLI — nothing leaves your machine.
+          API-key and local-model options arrive with a later update.
         </p>
       </section>
 
@@ -44,12 +57,29 @@ export function Settings(props: { status: SystemStatus }): JSX.Element {
         <h2>Privacy</h2>
         <div className="status-row">
           <span className="label">Anonymous usage metrics</span>
-          <span className="pill">Off</span>
+          <button
+            className={`pill ${settings?.metrics ? 'ok' : 'pending'}`}
+            style={{ cursor: 'pointer' }}
+            onClick={toggleMetrics}
+          >
+            {settings ? (settings.metrics ? 'On' : 'Off') : '…'}
+          </button>
         </div>
         <p className="muted small">
-          Everything stays on your computer. Usage metrics are off by default — you’ll be asked to opt
-          in, never opted in silently.
+          Everything stays on your computer. Metrics never include your questions, notes, or name — just a
+          signal that the app is being used. Toggle it off any time.
         </p>
+      </section>
+
+      <section className="card">
+        <h2>Setup</h2>
+        <div className="status-row">
+          <span className="label">First-run setup</span>
+          <button className="btn" onClick={replaySetup}>
+            Replay setup
+          </button>
+        </div>
+        <p className="muted small">Re-run the welcome + connect-AI + import walkthrough.</p>
       </section>
 
       <section className="card">

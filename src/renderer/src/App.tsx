@@ -7,6 +7,7 @@ import { Research } from './tabs/Research'
 import { Notebook } from './tabs/Notebook'
 import { Projects } from './tabs/Projects'
 import { Settings } from './tabs/Settings'
+import { Wizard } from './Wizard'
 import { useSystemStatus } from './hooks/useSystemStatus'
 import type { TabId } from './tabs'
 import type { CourseSummary } from '../../shared/ipc'
@@ -24,6 +25,20 @@ export function App(): JSX.Element {
   const [notebookVersion, setNotebookVersion] = useState(0)
   const [courses, setCourses] = useState<CourseSummary[]>([])
   const [course, setCourse] = useState<string>('')
+  const [onboarded, setOnboarded] = useState<boolean | null>(null) // null = still loading settings
+
+  useEffect(() => {
+    void window.pgp.getSettings().then((s) => setOnboarded(s.onboarded))
+  }, [])
+
+  // Never show onboarding to someone whose library is already imported (the
+  // builder, or a re-install over existing data) — mark them onboarded quietly.
+  useEffect(() => {
+    if (onboarded === false && (status.stats?.chunks ?? 0) > 0) {
+      void window.pgp.setSettings({ onboarded: true })
+      setOnboarded(true)
+    }
+  }, [onboarded, status.stats])
 
   useEffect(() => {
     if (status.ready) void window.pgp.courses().then(setCourses)
@@ -47,6 +62,9 @@ export function App(): JSX.Element {
     setOpenThreadId(null)
     setTab('tutor')
   }
+
+  if (onboarded === null) return <div className="shell" />
+  if (!onboarded) return <Wizard onDone={() => setOnboarded(true)} />
 
   return (
     <div className="shell">
