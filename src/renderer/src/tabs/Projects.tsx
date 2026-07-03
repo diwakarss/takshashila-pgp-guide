@@ -35,7 +35,7 @@ const AI_DISCLAIMERS = [
 // Quick asks per step — each just sends the text into the step's chat.
 const STEP_CHIPS: Record<string, string[]> = {
   define: ['Help me narrow it down', 'Is my definition sharp enough?'],
-  evidence: ['Suggest more sources', 'What data would prove the shifts?'],
+  evidence: ['Find more evidence', 'What data would prove the shifts?'],
   alternatives: ['Give me another angle', 'Which option is strongest?'],
   criteria: ['Which criteria fit this assignment?'],
   outcomes: ['Check my reasoning so far'],

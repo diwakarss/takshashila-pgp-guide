@@ -339,6 +339,17 @@ app.whenReady().then(() => {
         )
         const st0 = cp?.stepData['0']?.messages ?? []
         console.log(`[proj] step-1 convergence reply:`, st0[st0.length - 1]?.text.slice(0, 400))
+        // Evidence kickoff: the coach must fetch findings itself (figures + URLs),
+        // not assign the student reading homework.
+        await studyBrain.updateProject(p.id, {
+          stepData: {
+            ...cp!.stepData,
+            '0': { ...cp!.stepData['0'], notes: 'India imports most of its helium via Qatar; MRI scanners and chip fabs at risk from the strait closure.' }
+          }
+        })
+        const ev = await studyBrain.projectChat(p.id, 1)
+        const st1 = ev?.stepData['1']?.messages ?? []
+        console.log(`[proj] evidence kickoff reply:`, st1[st1.length - 1]?.text.slice(0, 500))
       }
       // Draft versions: save two, mark the second final.
       await studyBrain.updateProject(p.id, { draft: 'v1 script text' })

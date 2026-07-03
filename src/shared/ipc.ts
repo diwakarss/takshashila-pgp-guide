@@ -334,7 +334,7 @@ export const BARDACH_STEPS = [
     key: 'evidence',
     title: 'Assemble evidence',
     guide:
-      'Now prove it — or correct it. Gather the data and sources that verify the magnitudes you assumed in step 1, trace the causes, and stock up citable evidence for the later steps. If the evidence contradicts your definition, go back and sharpen it — that’s the method working.',
+      'Now prove it — or correct it. Your coach researches the actual figures and sources; you judge them. Save the findings that convince you with "Add evidence" — they become your citations later. If the evidence contradicts your step-1 definition, go back and sharpen it — that’s the method working.',
     done: 'the key numbers in your definition are verified (or corrected) and your evidence list holds the sources you’ll cite',
     lens: 'What does the data actually say?'
   },
