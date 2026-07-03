@@ -326,14 +326,14 @@ export const BARDACH_STEPS = [
     key: 'define',
     title: 'Define the problem',
     guide:
-      'Say precisely what’s wrong, for whom, and how big it is. A strong problem definition fits in one sentence and includes a magnitude — not "energy prices are affected" but "diesel prices rose X%, hitting Y".',
+      'Write ONE sharp, provisional sentence: what’s wrong, for whom, and roughly how big. Rough estimates are fine here — this is the hypothesis that aims your research; step 2 is where you verify it. Not "energy prices are affected" but "diesel prices seem to have risen sharply, squeezing Indian freight".',
     lens: 'Is this a state-capacity problem?'
   },
   {
     key: 'evidence',
     title: 'Assemble evidence',
     guide:
-      'Gather the data, reports, and examples that show the problem’s size and causes. Use "Find evidence" for leads, research in the Research tab, and pull your Notebook pages in with "Add evidence".',
+      'Now prove it — or correct it. Gather the data and sources that verify the magnitudes you assumed in step 1, trace the causes, and stock up citable evidence for the later steps. If the evidence contradicts your definition, go back and sharpen it — that’s the method working.',
     lens: 'What does the data actually say?'
   },
   {
