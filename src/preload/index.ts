@@ -40,6 +40,8 @@ const api = {
   generateQuiz: (spec: QuizSpec): Promise<QuizQuestion[]> => ipcRenderer.invoke(IPC.quizGenerate, spec),
   gradeQuiz: (question: { prompt: string; modelAnswer: string }, answer: string): Promise<QuizVerdict> =>
     ipcRenderer.invoke(IPC.quizGrade, { question, answer }),
+  quizIllustration: (concept: string, courseCode?: string): Promise<IllustrationImage> =>
+    ipcRenderer.invoke(IPC.quizIllustration, { concept, courseCode }),
   illustrationAvailable: (): Promise<boolean> => ipcRenderer.invoke(IPC.illustrationAvailable),
   generateIllustration: (spec: IllustrationSpec, courseCode?: string): Promise<IllustrationImage> =>
     ipcRenderer.invoke(IPC.illustrationGenerate, { spec, courseCode }),

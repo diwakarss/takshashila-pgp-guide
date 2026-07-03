@@ -561,6 +561,18 @@ h2 {
   border-radius: var(--radius-card);
   padding: 22px 24px;
 }
+.quiz-kind {
+  display: inline-block;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: #1d8a66;
+  background: color-mix(in srgb, #1d8a66 10%, transparent);
+  padding: 3px 9px;
+  border-radius: 999px;
+  margin-bottom: 12px;
+}
 .quiz-prompt {
   font-size: 17px;
   font-weight: 500;
@@ -600,6 +612,25 @@ h2 {
   border-color: var(--danger);
   background: color-mix(in srgb, var(--danger) 10%, transparent);
   color: var(--danger);
+}
+/* select-all: a checkbox affordance + trailing correctness mark */
+.quiz-option.multi .box {
+  flex: none;
+  width: 18px;
+  height: 18px;
+  border: 1.5px solid var(--hairline);
+  border-radius: 5px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+}
+.quiz-option.multi .box.on {
+  background: #1d8a66;
+  border-color: #1d8a66;
+}
+.quiz-option.multi .mark {
+  margin-left: auto;
 }
 .quiz-textarea {
   width: 100%;
@@ -644,6 +675,19 @@ h2 {
 .quiz-explain {
   margin: 8px 0;
   color: var(--ink);
+}
+.quiz-illus {
+  margin: 12px 0 4px;
+}
+.quiz-illus img {
+  display: block;
+  max-width: min(100%, 420px);
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius-control);
+  background: #fff;
+}
+.quiz-illus figcaption {
+  margin-top: 4px;
 }
 .quiz-actions {
   margin-top: 16px;

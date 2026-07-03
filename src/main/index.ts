@@ -159,6 +159,9 @@ function registerIpc(): void {
   ipcMain.handle(IPC.quizGrade, (_e, req: { question: { prompt: string; modelAnswer: string }; answer: string }) =>
     studyBrain.gradeQuizAnswer(req.question, req.answer)
   )
+  ipcMain.handle(IPC.quizIllustration, (_e, req: { concept: string; courseCode?: string }) =>
+    studyBrain.reuseIllustration(req.concept, req.courseCode)
+  )
 
   ipcMain.handle(IPC.illustrationAvailable, () => imageEngine.isAvailable())
 
@@ -183,13 +186,13 @@ app.whenReady().then(() => {
 
   if (process.env['PGP_DEV_QUIZ']) {
     void (async () => {
-      const qs = await studyBrain.generateQuiz({ courseCode: process.env['PGP_DEV_QUIZ_COURSE'], count: 3 })
-      console.log(
-        `[quiz] generated ${qs.length}:`,
-        JSON.stringify(
-          qs.map((q) => ({ k: q.kind, p: q.prompt.slice(0, 70), ans: q.kind === 'mcq' ? q.options[q.answerIndex] : 'freeform', src: q.source }))
-        )
-      )
+      const lib = await studyBrain.listConcepts()
+      console.log(`[quiz] library concepts (${lib.length}):`, JSON.stringify(lib.map((c) => `${c.courseCode ?? 'x'}:${c.title}`)))
+      const count = Number(process.env['PGP_DEV_QUIZ_COUNT'] ?? '8')
+      const qs = await studyBrain.generateQuiz({ courseCode: process.env['PGP_DEV_QUIZ_COURSE'], count })
+      const spread = qs.reduce<Record<string, number>>((m, q) => ({ ...m, [q.kind]: (m[q.kind] ?? 0) + 1 }), {})
+      console.log(`[quiz] generated ${qs.length}, spread:`, JSON.stringify(spread))
+      for (const q of qs) console.log(`[quiz]  ${q.kind}  concept="${q.concept}"  ${q.prompt.slice(0, 60)}`)
       const ff = qs.find((x) => x.kind === 'freeform')
       if (ff) {
         const v = await studyBrain.gradeQuizAnswer(
@@ -198,6 +201,15 @@ app.whenReady().then(() => {
         )
         console.log('[quiz] grade sample:', JSON.stringify(v))
       }
+      // Reuse check: how many questions keyed to an existing library image?
+      let hits = 0
+      for (const q of qs) {
+        if (!q.concept) continue
+        const img = await studyBrain.reuseIllustration(q.concept, process.env['PGP_DEV_QUIZ_COURSE'])
+        if (img.dataUrl) hits++
+        console.log(`[quiz] reuse "${q.concept}": ${img.dataUrl ? `HIT → ${img.title}` : img.error}`)
+      }
+      console.log(`[quiz] ${hits}/${qs.length} questions have a reusable illustration`)
     })().catch((e) => console.error('[quiz] failed:', e))
   }
 

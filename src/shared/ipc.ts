@@ -39,6 +39,8 @@ export const IPC = {
   quizGenerate: 'quiz:generate',
   /** Grade a free-form quiz answer against the source. */
   quizGrade: 'quiz:grade',
+  /** Reuse-only: fetch an existing library illustration for a quiz concept (never generates). */
+  quizIllustration: 'quiz:illustration',
   /** Is on-demand illustration generation available on this machine? */
   illustrationAvailable: 'illustration:available',
   /** Generate (or return cached) one illustration; resolves to a data URL or an error reason. */
@@ -135,15 +137,22 @@ export type ThreadDetail = Thread & { turns: Turn[] }
 export type AskResult = { threadId: string; turn: Turn }
 
 // ── quiz ────────────────────────────────────────────────────────────────
+// Four formats keep recall varied and mostly typing-free:
+//  - mcq        one correct of ~4 options
+//  - truefalse  a statement to judge (options are ['True','False'])
+//  - multi      select ALL that apply (answerIndexes is the correct set)
+//  - freeform   short written answer, engine-graded (capped to ~1 in 5)
 export type QuizQuestion = {
   id: string
-  kind: 'mcq' | 'freeform'
+  kind: 'mcq' | 'truefalse' | 'multi' | 'freeform'
   prompt: string
-  options: string[] // mcq only (4)
-  answerIndex: number // mcq only; -1 for free-form
+  options: string[] // mcq / truefalse / multi
+  answerIndex: number // mcq / truefalse; -1 otherwise
+  answerIndexes: number[] // multi only (the correct set); [] otherwise
   modelAnswer: string // free-form only
   explanation: string
   source: string | null // lesson title the question tests
+  concept: string // core idea, used to reuse a matching library illustration
 }
 
 export type QuizSpec = { courseCode?: string; count?: number }

@@ -165,8 +165,14 @@ class StudyBrainService {
   // ── quiz ──────────────────────────────────────────────────────────────
 
   async generateQuiz(spec: QuizSpec): Promise<QuizQuestion[]> {
-    await this.open()
-    return generateQuiz(spec, { search: (q, l, c) => this.search(q, l, c), engine: agentCliEngine })
+    const brain = await this.open()
+    // Hand the engine the titles of illustrations we already have so it can key
+    // questions to them (exact title) — those images are reused on the reveal.
+    const concepts = await brain.listConcepts()
+    const conceptTitles = concepts
+      .filter((c) => !spec.courseCode || !c.courseCode || c.courseCode === spec.courseCode)
+      .map((c) => c.title)
+    return generateQuiz(spec, { search: (q, l, c) => this.search(q, l, c), engine: agentCliEngine, conceptTitles })
   }
 
   async gradeQuizAnswer(question: { prompt: string; modelAnswer: string }, answer: string): Promise<QuizVerdict> {
@@ -206,6 +212,28 @@ class StudyBrainService {
       const quota = /429|quota|billing|insufficient|exceeded/i.test(msg)
       return { id: spec.id, title: spec.title, error: msg, quota }
     }
+  }
+
+  /**
+   * Reuse-only illustration lookup for quizzes: if a library concept already
+   * matches this idea, return its image. NEVER generates (quizzes stay free and
+   * instant). Returns an error reason when nothing matches.
+   */
+  async reuseIllustration(concept: string, _courseCode?: string): Promise<IllustrationImage> {
+    const term = concept.trim()
+    if (!term) return { id: 'quiz', title: concept, error: 'no concept' }
+    const brain = await this.open()
+    // Deterministic: the quiz engine keyed each question to an exact library
+    // title (or none), so match on the normalised title — no wrong images, no
+    // generation. Ignore courseCode here: a concept title is course-unique.
+    const norm = (s: string): string => s.toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim()
+    const target = norm(term)
+    const hit = (await brain.listConcepts()).find((c) => norm(c.title) === target)
+    if (hit) {
+      const dataUrl = imageEngine.read(hit.imageFile)
+      if (dataUrl) return { id: hit.key, title: hit.title, dataUrl }
+    }
+    return { id: 'quiz', title: concept, error: 'no matching illustration' }
   }
 
   async conceptCount(): Promise<number> {

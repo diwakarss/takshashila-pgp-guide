@@ -1,12 +1,16 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { CheckSquare, Check, X, RotateCcw } from 'lucide-react'
-import type { CourseSummary, EngineStatus, QuizQuestion, QuizVerdict } from '../../../shared/ipc'
+import type { CourseSummary, EngineStatus, IllustrationImage, QuizQuestion, QuizVerdict } from '../../../shared/ipc'
 
 type Result = { correct: boolean; verdict?: QuizVerdict }
 
-// Quiz — Stage 1: pick a course → generate questions from the corpus (MCQ +
-// free-form) → answer → graded reveal with the source → score. Gamification,
-// spaced repetition, and a dashboard come next.
+const sameSet = (a: number[], b: number[]): boolean =>
+  a.length === b.length && [...a].sort((x, y) => x - y).every((v, i) => v === [...b].sort((x, y) => x - y)[i])
+
+// Quiz — Stage 1: pick a course → generate a varied set of questions from the
+// corpus (MCQ, true/false, select-all, short free-form) → answer → graded
+// reveal with the source and, when we already have one, a matching illustration
+// → score. Gamification, spaced repetition, and a dashboard come next.
 export function Quiz(props: {
   ready: boolean
   engine: EngineStatus | null
@@ -16,27 +20,45 @@ export function Quiz(props: {
   const { ready, engine, courses, onGoToSettings } = props
   const [phase, setPhase] = useState<'setup' | 'taking' | 'done'>('setup')
   const [course, setCourse] = useState('')
-  const [count, setCount] = useState(6)
+  const [count, setCount] = useState(8)
   const [questions, setQuestions] = useState<QuizQuestion[]>([])
   const [idx, setIdx] = useState(0)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [selected, setSelected] = useState<number | null>(null)
-  const [text, setText] = useState('')
+  const [selected, setSelected] = useState<number | null>(null) // mcq / truefalse
+  const [multiSel, setMultiSel] = useState<number[]>([]) // multi
+  const [text, setText] = useState('') // freeform
   const [revealed, setRevealed] = useState(false)
   const [verdict, setVerdict] = useState<QuizVerdict | null>(null)
   const [grading, setGrading] = useState(false)
+  const [illus, setIllus] = useState<IllustrationImage | null>(null)
   const [results, setResults] = useState<Result[]>([])
 
   const engineReady = engine?.available ?? false
   const q = questions[idx]
+  const isSingle = q?.kind === 'mcq' || q?.kind === 'truefalse'
 
   const resetQuestion = (): void => {
     setSelected(null)
+    setMultiSel([])
     setText('')
     setRevealed(false)
     setVerdict(null)
+    setIllus(null)
   }
+
+  // On reveal, reuse an existing library illustration for this concept if one
+  // matches. This never generates — quizzes stay free and instant.
+  useEffect(() => {
+    if (!revealed || !q?.concept) return
+    let live = true
+    void window.pgp.quizIllustration(q.concept, course || undefined).then((img) => {
+      if (live && img.dataUrl) setIllus(img)
+    })
+    return () => {
+      live = false
+    }
+  }, [revealed, idx]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const start = async (): Promise<void> => {
     setBusy(true)
@@ -59,11 +81,18 @@ export function Quiz(props: {
     }
   }
 
+  const toggleMulti = (i: number): void =>
+    setMultiSel((s) => (s.includes(i) ? s.filter((n) => n !== i) : [...s, i]))
+
   const submit = async (): Promise<void> => {
     if (!q || revealed) return
-    if (q.kind === 'mcq') {
+    if (isSingle) {
       if (selected == null) return
       setResults((r) => [...r, { correct: selected === q.answerIndex }])
+      setRevealed(true)
+    } else if (q.kind === 'multi') {
+      if (multiSel.length === 0) return
+      setResults((r) => [...r, { correct: sameSet(multiSel, q.answerIndexes) }])
       setRevealed(true)
     } else {
       if (!text.trim()) return
@@ -130,17 +159,14 @@ export function Quiz(props: {
               <span className="course-select-label">Questions</span>
               <div className="len-chips">
                 {[5, 8, 10].map((n) => (
-                  <button
-                    key={n}
-                    className={`chip${count === n ? ' active' : ''}`}
-                    onClick={() => setCount(n)}
-                  >
+                  <button key={n} className={`chip${count === n ? ' active' : ''}`} onClick={() => setCount(n)}>
                     {n}
                   </button>
                 ))}
               </div>
             </div>
           </div>
+          <p className="muted small">Mixed formats — multiple choice, true/false, select-all, and a few written answers.</p>
           {!engineReady && <p className="banner danger">Your AI ({engine?.label}) isn’t reachable right now.</p>}
           <button className="btn primary quiz-start" disabled={!engineReady || busy} onClick={start}>
             {busy ? 'Building your quiz…' : 'Start quiz'}
@@ -161,7 +187,9 @@ export function Quiz(props: {
           <div className="quiz-score">
             {score % 1 === 0 ? score : score.toFixed(1)} / {questions.length}
           </div>
-          <p className="muted">{pct}% — {pct >= 80 ? 'strong recall!' : pct >= 50 ? 'solid, keep at it.' : 'worth another pass.'}</p>
+          <p className="muted">
+            {pct}% — {pct >= 80 ? 'strong recall!' : pct >= 50 ? 'solid, keep at it.' : 'worth another pass.'}
+          </p>
           <button className="btn primary" onClick={() => setPhase('setup')}>
             <RotateCcw size={16} /> New quiz
           </button>
@@ -171,6 +199,9 @@ export function Quiz(props: {
   }
 
   // ── taking ──────────────────────────────────────────────
+  const kindLabel =
+    q?.kind === 'truefalse' ? 'True or false' : q?.kind === 'multi' ? 'Select all that apply' : q?.kind === 'freeform' ? 'Written answer' : 'Multiple choice'
+
   return (
     <div className="surface quiz">
       <div className="quiz-progress">
@@ -178,9 +209,10 @@ export function Quiz(props: {
       </div>
       {q && (
         <section className="quiz-card">
+          <div className="quiz-kind">{kindLabel}</div>
           <div className="quiz-prompt">{q.prompt}</div>
 
-          {q.kind === 'mcq' ? (
+          {isSingle && (
             <div className="quiz-options">
               {q.options.map((opt, i) => {
                 let cls = 'quiz-option'
@@ -197,7 +229,31 @@ export function Quiz(props: {
                 )
               })}
             </div>
-          ) : (
+          )}
+
+          {q.kind === 'multi' && (
+            <div className="quiz-options">
+              {q.options.map((opt, i) => {
+                const picked = multiSel.includes(i)
+                const isAnswer = q.answerIndexes.includes(i)
+                let cls = 'quiz-option multi'
+                if (revealed) {
+                  if (isAnswer) cls += ' correct'
+                  else if (picked) cls += ' wrong'
+                } else if (picked) cls += ' selected'
+                return (
+                  <button key={i} className={cls} disabled={revealed} onClick={() => toggleMulti(i)}>
+                    <span className={`box${picked ? ' on' : ''}`}>{picked && <Check size={13} />}</span>
+                    <span>{opt}</span>
+                    {revealed && isAnswer && <Check size={16} className="mark" />}
+                    {revealed && picked && !isAnswer && <X size={16} className="mark" />}
+                  </button>
+                )
+              })}
+            </div>
+          )}
+
+          {q.kind === 'freeform' && (
             <textarea
               className="quiz-textarea"
               placeholder="Answer in a few sentences…"
@@ -221,6 +277,12 @@ export function Quiz(props: {
                 </p>
               )}
               {q.explanation && <p className="quiz-explain">{q.explanation}</p>}
+              {illus?.dataUrl && (
+                <figure className="quiz-illus">
+                  <img src={illus.dataUrl} alt={illus.title} />
+                  <figcaption className="muted small">{illus.title}</figcaption>
+                </figure>
+              )}
               {q.source && <p className="muted small">From: {q.source}</p>}
             </div>
           )}
@@ -229,7 +291,7 @@ export function Quiz(props: {
             {!revealed ? (
               <button
                 className="btn primary"
-                disabled={grading || (q.kind === 'mcq' ? selected == null : !text.trim())}
+                disabled={grading || (isSingle ? selected == null : q.kind === 'multi' ? multiSel.length === 0 : !text.trim())}
                 onClick={submit}
               >
                 {grading ? 'Grading…' : 'Submit'}

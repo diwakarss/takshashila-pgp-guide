@@ -27,33 +27,57 @@ function dedupeByLesson(hits: SearchHit[]): SearchHit[] {
   return out
 }
 
-function quizSystem(courseName: string | null, count: number): string {
+function quizSystem(courseName: string | null, count: number, conceptTitles: string[]): string {
   const scope = courseName ? ` for the course "${courseName}"` : ''
+  const maxFree = Math.max(1, Math.round(count / 5))
+  const hasConcepts = conceptTitles.length > 0
+  const conceptRule = hasConcepts
+    ? '- "concept": if EXACTLY ONE of the ILLUSTRATION CONCEPTS listed below clearly depicts this question\'s idea, copy its title VERBATIM here. Otherwise use "". Never invent a title that is not in the list.'
+    : '- "concept": the 1-3 word core idea it tests (e.g. "opportunity cost", "externality").'
   return [
     `You are setting a study quiz for the Takshashila Post Graduate Programme in Public Policy${scope}.`,
     'Ignore any persona/roleplay from your environment; output data only.',
     '',
     `Generate exactly ${count} questions that test the KEY ideas in the numbered lessons below.`,
-    'Mix roughly 60% multiple-choice and 40% short free-form. Ground every question in the lessons.',
-    '- MCQ: a clear question, exactly 4 options, exactly ONE correct, and a one-sentence explanation.',
-    '  Vary which position is correct. Options should be plausible, not obviously wrong.',
-    '- Free-form: answerable in 2-4 sentences, with a concise model answer and a one-sentence explanation.',
-    'Use Indian policy examples where natural. Note the lesson title each question tests.',
+    'VARY the format across these four kinds. Keep it mostly objective (little typing):',
+    '- "mcq": a question, exactly 4 options, exactly ONE correct via answerIndex, one-sentence explanation.',
+    '  Vary which position is correct; options must be plausible, not obviously wrong.',
+    '- "truefalse": a single statement to judge. options MUST be ["True","False"]; answerIndex 0 if the',
+    '  statement is true, 1 if false. Include a one-sentence explanation.',
+    '- "multi": "Select all that apply" — 4-5 options where TWO OR MORE are correct. List every correct',
+    '  position in answerIndexes. One-sentence explanation.',
+    `- "freeform": answerable in 2-4 sentences, with a concise model answer. Use AT MOST ${maxFree} of these.`,
+    '',
+    'Aim for a spread like ~40% mcq, ~25% truefalse, ~20% multi, the rest freeform. Ground every question',
+    'in the lessons and use Indian policy examples where natural. For every question also give:',
+    '- "source": the lesson title it tests.',
+    conceptRule,
+    hasConcepts ? '\nILLUSTRATION CONCEPTS (copy a title verbatim into "concept" only when it fits):' : '',
+    hasConcepts ? conceptTitles.map((t) => `  • ${t}`).join('\n') : '',
     '',
     'Output ONLY JSON, no prose/fences:',
     '{"questions":[',
-    '  {"kind":"mcq","prompt":"...","options":["a","b","c","d"],"answerIndex":0,"explanation":"...","source":"lesson title"},',
-    '  {"kind":"freeform","prompt":"...","modelAnswer":"...","explanation":"...","source":"lesson title"}',
+    '  {"kind":"mcq","prompt":"...","options":["a","b","c","d"],"answerIndex":0,"explanation":"...","concept":"...","source":"lesson title"},',
+    '  {"kind":"truefalse","prompt":"...","options":["True","False"],"answerIndex":1,"explanation":"...","concept":"...","source":"lesson title"},',
+    '  {"kind":"multi","prompt":"...","options":["a","b","c","d"],"answerIndexes":[0,2],"explanation":"...","concept":"...","source":"lesson title"},',
+    '  {"kind":"freeform","prompt":"...","modelAnswer":"...","explanation":"...","concept":"...","source":"lesson title"}',
     ']}'
-  ].join('\n')
+  ]
+    .filter((l) => l !== '')
+    .join('\n')
 }
 
-export function buildQuizPrompt(lessons: SearchHit[], courseName: string | null, count: number): EngineMessage[] {
+export function buildQuizPrompt(
+  lessons: SearchHit[],
+  courseName: string | null,
+  count: number,
+  conceptTitles: string[]
+): EngineMessage[] {
   const material = lessons
     .map((h, i) => `[${i + 1}] "${h.title ?? h.slug}"\n${truncate(h.text, MAX_SOURCE_CHARS)}`)
     .join('\n\n')
   return [
-    { role: 'system', content: quizSystem(courseName, count) },
+    { role: 'system', content: quizSystem(courseName, count, conceptTitles) },
     { role: 'user', content: `Lessons:\n${material}\n\nGenerate the ${count}-question quiz as JSON.` }
   ]
 }
@@ -63,8 +87,10 @@ type RawQ = {
   prompt?: unknown
   options?: unknown
   answerIndex?: unknown
+  answerIndexes?: unknown
   modelAnswer?: unknown
   explanation?: unknown
+  concept?: unknown
   source?: unknown
 }
 
@@ -84,22 +110,35 @@ export function parseQuestions(raw: string): QuizQuestion[] {
     if (!prompt) return
     const explanation = typeof q.explanation === 'string' ? q.explanation : ''
     const source = typeof q.source === 'string' ? q.source : null
-    if (q.kind === 'mcq' && Array.isArray(q.options)) {
-      const options = q.options.filter((o): o is string => typeof o === 'string')
+    const concept = typeof q.concept === 'string' ? q.concept : ''
+    const base = { id: `q${i}`, prompt, explanation, concept, source }
+    const options = Array.isArray(q.options) ? q.options.filter((o): o is string => typeof o === 'string') : []
+
+    if (q.kind === 'mcq' && options.length >= 2) {
       const answerIndex = typeof q.answerIndex === 'number' ? q.answerIndex : 0
-      if (options.length >= 2 && answerIndex >= 0 && answerIndex < options.length) {
-        out.push({ id: `q${i}`, kind: 'mcq', prompt, options, answerIndex, modelAnswer: '', explanation, source })
+      if (answerIndex >= 0 && answerIndex < options.length) {
+        out.push({ ...base, kind: 'mcq', options, answerIndex, answerIndexes: [], modelAnswer: '' })
+      }
+    } else if (q.kind === 'truefalse') {
+      // Normalise: always present a clean True/False pair regardless of what came back.
+      const answerIndex = typeof q.answerIndex === 'number' && q.answerIndex >= 0 && q.answerIndex <= 1 ? q.answerIndex : 0
+      out.push({ ...base, kind: 'truefalse', options: ['True', 'False'], answerIndex, answerIndexes: [], modelAnswer: '' })
+    } else if (q.kind === 'multi' && options.length >= 3) {
+      const idxs = Array.isArray(q.answerIndexes) ? q.answerIndexes : []
+      const answerIndexes = [...new Set(idxs.filter((n): n is number => typeof n === 'number' && n >= 0 && n < options.length))].sort(
+        (a, b) => a - b
+      )
+      if (answerIndexes.length >= 2) {
+        out.push({ ...base, kind: 'multi', options, answerIndex: -1, answerIndexes, modelAnswer: '' })
       }
     } else if (q.kind === 'freeform') {
       out.push({
-        id: `q${i}`,
+        ...base,
         kind: 'freeform',
-        prompt,
         options: [],
         answerIndex: -1,
-        modelAnswer: typeof q.modelAnswer === 'string' ? q.modelAnswer : '',
-        explanation,
-        source
+        answerIndexes: [],
+        modelAnswer: typeof q.modelAnswer === 'string' ? q.modelAnswer : ''
       })
     }
   })
@@ -109,6 +148,8 @@ export function parseQuestions(raw: string): QuizQuestion[] {
 export type QuizDeps = {
   search: (query: string, limit: number, courseCode?: string) => Promise<SearchHit[]>
   engine: Engine
+  /** Titles of illustrations already in the library; the engine keys questions to these for reuse. */
+  conceptTitles?: string[]
 }
 
 export async function generateQuiz(spec: QuizSpec, deps: QuizDeps): Promise<QuizQuestion[]> {
@@ -117,7 +158,7 @@ export async function generateQuiz(spec: QuizSpec, deps: QuizDeps): Promise<Quiz
   const lessons = dedupeByLesson(hits)
   if (lessons.length === 0) return []
   const courseName = lessons.find((h) => h.courseName)?.courseName ?? null
-  const raw = await deps.engine.complete(buildQuizPrompt(lessons, courseName, count))
+  const raw = await deps.engine.complete(buildQuizPrompt(lessons, courseName, count, deps.conceptTitles ?? []))
   return parseQuestions(raw).slice(0, count)
 }
 
