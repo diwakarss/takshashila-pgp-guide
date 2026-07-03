@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState, type MouseEvent as ReactMouseEvent } from 'react'
 import { Settings as SettingsIcon, Plus, PanelLeftClose, PanelLeft, Flame, Search } from 'lucide-react'
 import { NAV_TABS, type TabId } from '../tabs'
 import type { BrainStats, EngineStatus, NotebookPageSummary, QuizStats, Thread } from '../../../shared/ipc'
@@ -36,6 +36,13 @@ export function Sidebar(props: {
     onNotebookChanged
   } = props
   const [collapsed, setCollapsed] = useState(false)
+  const MIN_W = 180
+  const MAX_W = 460
+  const [width, setWidth] = useState<number>(() => {
+    const v = Number(localStorage.getItem('pgp.sidebarWidth'))
+    return v >= MIN_W && v <= MAX_W ? v : 210
+  })
+  const widthRef = useRef(width)
   const [threads, setThreads] = useState<Thread[]>([])
   const [quiz, setQuiz] = useState<QuizStats | null>(null)
   const [nbPages, setNbPages] = useState<NotebookPageSummary[]>([])
@@ -71,8 +78,32 @@ export function Sidebar(props: {
     onNotebookChanged()
   }
 
+  // Drag the right edge to resize; width persists across launches.
+  const startResize = (e: ReactMouseEvent): void => {
+    e.preventDefault()
+    document.body.classList.add('resizing-x')
+    const onMove = (ev: globalThis.MouseEvent): void => {
+      const w = Math.min(MAX_W, Math.max(MIN_W, ev.clientX))
+      widthRef.current = w
+      setWidth(w)
+    }
+    const onUp = (): void => {
+      document.body.classList.remove('resizing-x')
+      document.removeEventListener('mousemove', onMove)
+      document.removeEventListener('mouseup', onUp)
+      localStorage.setItem('pgp.sidebarWidth', String(widthRef.current))
+    }
+    document.addEventListener('mousemove', onMove)
+    document.addEventListener('mouseup', onUp)
+  }
+
   return (
-    <nav className={`sidebar${collapsed ? ' collapsed' : ''}`} aria-label="Main">
+    <nav
+      className={`sidebar${collapsed ? ' collapsed' : ''}`}
+      aria-label="Main"
+      style={collapsed ? undefined : { width }}
+    >
+      {!collapsed && <div className="sidebar-resize" onMouseDown={startResize} title="Drag to resize" />}
       <div className="sidebar-top">
         {!collapsed && <div className="sidebar-wordmark">PGP Guide</div>}
         <button className="icon-btn" title={collapsed ? 'Expand' : 'Collapse'} onClick={() => setCollapsed((c) => !c)}>
