@@ -160,6 +160,7 @@ function registerIpc(): void {
   ipcMain.handle(IPC.corpusCourses, () => studyBrain.courses())
 
   ipcMain.handle(IPC.tutorAsk, (_e, req: AskRequest) => studyBrain.ask(req))
+  ipcMain.handle(IPC.researchStart, (_e, question: string) => studyBrain.createResearchThread(question))
   ipcMain.handle(IPC.researchAsk, (_e, req: ResearchRequest) => studyBrain.research(req))
   ipcMain.handle(IPC.researchLens, (_e, req: LensRequest) => studyBrain.researchLens(req))
 

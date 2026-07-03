@@ -167,6 +167,17 @@ class StudyBrainService {
     return { threadId, turn }
   }
 
+  /** Create an (empty) research thread titled from the question, and return its
+   *  id — so the UI can show the new thread immediately, before the slow web
+   *  research runs into it. */
+  async createResearchThread(question: string): Promise<{ threadId: string; title: string }> {
+    const brain = await this.open()
+    const threadId = randomUUID()
+    const title = makeTitle(question)
+    await brain.createThread({ id: threadId, tab: 'research', courseCode: null, title })
+    return { threadId, title }
+  }
+
   /** Ask a web research question in a thread (new if no threadId). Web-first,
    *  no corpus retrieval — a separate conversation space from tutoring. */
   async research(req: ResearchRequest): Promise<AskResult> {

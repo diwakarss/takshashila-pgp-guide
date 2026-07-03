@@ -44,8 +44,15 @@ export function Research(props: {
   const [busy, setBusy] = useState(false)
   const [pending, setPending] = useState<string | null>(null)
   const [pendingLens, setPendingLens] = useState<{ label: string } | null>(null)
+  const [pendingThreadId, setPendingThreadId] = useState<string | null>(null) // which thread the pending belongs to
   const [error, setError] = useState<string | null>(null)
   const scrollRef = useRef<HTMLDivElement>(null)
+  // Track the thread currently in view, so a slow research that finishes after
+  // the user has navigated away doesn't yank them back.
+  const openIdRef = useRef<string | null>(openThreadId)
+  useEffect(() => {
+    openIdRef.current = openThreadId
+  }, [openThreadId])
 
   // Highlight → Notebook capture: a floating pill at the selection, then a page picker.
   const [pill, setPill] = useState<{ capture: Capture; x: number; y: number } | null>(null)
@@ -102,36 +109,52 @@ export function Research(props: {
     setBusy(true)
     setError(null)
     setPendingLens({ label: LENS_BAR.find((l) => l.kind === lens)?.label ?? 'lens' })
+    setPendingThreadId(thread.id)
     try {
       const res = await window.pgp.researchLens({ threadId: thread.id, question, lens, context })
       const detail = await window.pgp.getThread(res.threadId)
-      setThread(detail)
+      if (openIdRef.current === res.threadId) setThread(detail)
       onThreadsChanged()
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e))
     } finally {
       setBusy(false)
       setPendingLens(null)
+      setPendingThreadId(null)
     }
   }
 
   const ask = async (question: string): Promise<void> => {
-    if (!question.trim() || busy) return
+    const text = question.trim()
+    if (!text || busy) return
     setBusy(true)
-    setPending(question.trim())
     setError(null)
     setQ('')
     try {
-      const res = await window.pgp.askResearch({ question: question.trim(), threadId: thread?.id })
+      // New research → create the titled thread FIRST and switch to it, so it
+      // appears in Recents immediately and the "Researching…" state lives in its
+      // own thread (not bleeding over whatever else is on screen).
+      let threadId = thread?.id
+      if (!threadId) {
+        const started = await window.pgp.researchStart(text)
+        threadId = started.threadId
+        setThread(await window.pgp.getThread(threadId))
+        onOpenThread(threadId)
+        onThreadsChanged()
+      }
+      setPending(text)
+      setPendingThreadId(threadId)
+
+      const res = await window.pgp.askResearch({ question: text, threadId })
       const detail = await window.pgp.getThread(res.threadId)
-      setThread(detail)
-      if (openThreadId !== res.threadId) onOpenThread(res.threadId)
+      if (openIdRef.current === res.threadId) setThread(detail)
       onThreadsChanged()
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e))
     } finally {
       setBusy(false)
       setPending(null)
+      setPendingThreadId(null)
     }
   }
 
@@ -181,7 +204,7 @@ export function Research(props: {
           <ResearchTurnView key={turn.id} turn={turn} busy={busy} onLens={runLens} onCapture={onCapture} />
         ))}
 
-        {pending && (
+        {pending && pendingThreadId === openThreadId && (
           <div className="turn">
             <div className="turn-q">{pending}</div>
             <div className="turn-a">
@@ -189,7 +212,7 @@ export function Research(props: {
             </div>
           </div>
         )}
-        {pendingLens && (
+        {pendingLens && pendingThreadId === openThreadId && (
           <div className="turn">
             <div className="turn-a">
               <p className="muted small thinking">Building {pendingLens.label}…</p>

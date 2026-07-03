@@ -29,6 +29,8 @@ export const IPC = {
   engineStatus: 'engine:status',
   /** Ask the tutor in a thread (new if no threadId); returns the appended turn. */
   tutorAsk: 'tutor:ask',
+  /** Create (and title) a research thread up-front, before the slow search runs. */
+  researchStart: 'research:start',
   /** Ask a web research question in a thread (new if no threadId). */
   researchAsk: 'research:ask',
   /** Generate a structured policy lens (stakeholder map / two sides / evidence / timeline). */
