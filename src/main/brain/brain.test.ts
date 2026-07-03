@@ -79,6 +79,30 @@ describe('Brain (PGLite + pgvector)', () => {
     expect(await brain.conceptCount()).toBe(1)
   })
 
+  it('exportConcepts round-trips full rows incl. the embedding (for shipping)', async () => {
+    const embedding = vec(11)
+    await brain.upsertConcept({
+      key: 'surplus',
+      title: 'Consumer surplus',
+      courseCode: 'PP231',
+      description: 'area under demand above price',
+      composition: 'a shaded triangle',
+      imageFile: 'surplus.png',
+      embedding
+    })
+    const rows = await brain.exportConcepts()
+    expect(rows).toHaveLength(1)
+    const [r] = rows
+    expect(r).toMatchObject({ key: 'surplus', title: 'Consumer surplus', courseCode: 'PP231', imageFile: 'surplus.png' })
+    expect(r.embedding).toHaveLength(EMBED_DIM)
+    expect(r.embedding[11]).toBeCloseTo(embedding[11], 5)
+    // A re-import (into a fresh brain) reuses the shipped embedding for matching.
+    const fresh = await Brain.open()
+    await fresh.upsertConcept(r)
+    expect((await fresh.matchConcept(embedding, { threshold: 0.85 }))?.key).toBe('surplus')
+    await fresh.close()
+  })
+
   it('rejects embeddings of the wrong dimension', async () => {
     await expect(
       brain.corpusWriter.upsertPage({ slug: 'bad' }, [{ ordinal: 0, text: 'x', embedding: [1, 2, 3] }])

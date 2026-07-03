@@ -163,7 +163,7 @@ function registerIpc(): void {
     studyBrain.reuseIllustration(req.concept, req.courseCode)
   )
 
-  ipcMain.handle(IPC.illustrationAvailable, () => imageEngine.isAvailable())
+  ipcMain.handle(IPC.illustrationAvailable, () => studyBrain.imageGenEnabled() && imageEngine.isAvailable())
 
   ipcMain.handle(
     IPC.illustrationGenerate,
@@ -182,6 +182,33 @@ app.whenReady().then(() => {
 
   if (process.env['PGP_DEV_BUILD_LIBRARY']) {
     void buildLibrary().catch((e) => console.error('[lib] build failed:', e))
+  }
+
+  // Simulate the student path: wipe the library, reload it from the shipped
+  // bundle, and prove a library miss never generates when gen is off.
+  if (process.env['PGP_DEV_TEST_SHIP']) {
+    void (async () => {
+      console.log('[ship] imageGenEnabled =', studyBrain.imageGenEnabled())
+      await studyBrain.clearLibrary()
+      console.log('[ship] cleared library, count =', await studyBrain.conceptCount())
+      const r = await studyBrain.importLibrary()
+      console.log(`[ship] imported ${r.concepts} concepts, ${r.images} images; count = ${await studyBrain.conceptCount()}`)
+      const known = (await studyBrain.listConcepts())[0]
+      if (known) {
+        const hit = await studyBrain.resolveIllustration({ id: 't', title: known.title, composition: '' })
+        console.log(`[ship] resolve known "${known.title}": ${hit.dataUrl ? 'REUSED shipped image ✓' : 'MISS ✗ ' + hit.error}`)
+      }
+      const miss = await studyBrain.resolveIllustration({ id: 't2', title: 'Quantum chromodynamics of masala chai', composition: 'x' })
+      console.log(`[ship] resolve unknown (gen off): ${miss.dataUrl ? 'GENERATED — BAD ✗' : 'no generation ✓ (' + miss.error + ')'}`)
+    })().catch((e) => console.error('[ship] test failed:', e))
+  }
+
+  // Builder: export the concept library into the corpus bundle for shipping.
+  if (process.env['PGP_DEV_PUBLISH_LIBRARY']) {
+    void studyBrain
+      .publishLibrary()
+      .then((r) => console.log(`[lib] published ${r.concepts} concepts, ${r.images} images → ${r.dir}`))
+      .catch((e) => console.error('[lib] publish failed:', e))
   }
 
   if (process.env['PGP_DEV_QUIZ']) {

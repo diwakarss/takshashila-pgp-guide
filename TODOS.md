@@ -58,6 +58,18 @@ shell, then re-run the dark-mode + contrast audit above against the real palette
 
 ## Ship the illustration library with the corpus (publish pipeline)
 
+**✅ DONE (2026-07-03).** `studyBrain.publishLibrary()` exports the library into an
+`illustrations/` bundle (images + `concepts.json` incl. embeddings) beside the corpus
+markdown, so it travels with the corpus repo. `importLibrary()` loads it into a student's
+brain (upsert with shipped embeddings, no re-embedding) + copies images locally, and runs
+automatically at the end of `importCorpus`. Verified round-trip: wipe → reload 28
+concepts/28 images → reuse works. Builder runs `PGP_DEV_PUBLISH_LIBRARY=1`, then commits the
+bundle to the corpus (pgp-brain) repo. Remaining for later: the Worker/R2 auto-sync of the
+bundle (§7.3d) — for now it ships via the git corpus repo.
+
+---
+_Original context:_
+
 **What:** Bundle the concept illustration library with the corpus so students get
 illustrations for free. Two parts that must travel together:
 1. The image PNGs (currently only in the builder's `userData/illustrations/`).
@@ -74,6 +86,16 @@ into the corpus bundle; on import, load them into the student's brain + illustra
 **Depends on:** the corpus publish pipeline existing.
 
 ## Hard-off illustration generation in production (student builds)
+
+**✅ DONE (2026-07-03).** `studyBrain.imageGenEnabled()` gates generation: OFF in packaged
+builds by default, ON in dev, with `PGP_ENABLE_IMAGE_GEN=1` / `PGP_DISABLE_IMAGE_GEN=1`
+overrides. `resolveIllustration` checks it BEFORE the `imageEngine.isAvailable()` branch, so
+a library miss in a student build returns "not in the illustration library" and never
+generates — even with a stray key. `illustrationAvailable` IPC now also reflects it.
+Verified with `PGP_DISABLE_IMAGE_GEN=1`: unknown concept → no generation.
+
+---
+_Original context:_
 
 **What:** An explicit "generation disabled" flag for shipped/student builds, so a slide
 illustration miss NEVER triggers image generation — regardless of any stray OpenAI key

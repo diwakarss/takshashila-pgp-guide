@@ -202,6 +202,35 @@ export class Brain {
     await this.db.query(`DELETE FROM concepts`)
   }
 
+  /** Full concept rows including embeddings — used to publish the library into
+   *  the corpus bundle so student installs get illustrations without any image
+   *  generation. `embedding::text` yields a JSON-parseable '[..]' literal. */
+  async exportConcepts(): Promise<ConceptRecord[]> {
+    const r = await this.db.query<{
+      key: string
+      title: string
+      course_code: string | null
+      description: string | null
+      composition: string | null
+      image_file: string
+      embedding: string | null
+    }>(
+      `SELECT key, title, course_code, description, composition, image_file, embedding::text AS embedding
+         FROM concepts ORDER BY key`
+    )
+    return r.rows
+      .filter((row) => row.embedding)
+      .map((row) => ({
+        key: row.key,
+        title: row.title,
+        courseCode: row.course_code,
+        description: row.description,
+        composition: row.composition,
+        imageFile: row.image_file,
+        embedding: JSON.parse(row.embedding as string) as number[]
+      }))
+  }
+
   /** List concepts (metadata only) — used to back up the library before a regen. */
   async listConcepts(): Promise<{ key: string; title: string; courseCode: string | null; imageFile: string }[]> {
     const r = await this.db.query<{ key: string; title: string; course_code: string | null; image_file: string }>(

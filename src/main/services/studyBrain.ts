@@ -1,8 +1,8 @@
 import { app } from 'electron'
-import { join } from 'node:path'
-import { existsSync, readdirSync } from 'node:fs'
+import { join, dirname } from 'node:path'
+import { existsSync, readdirSync, mkdirSync, copyFileSync, writeFileSync, readFileSync } from 'node:fs'
 import { randomUUID } from 'node:crypto'
-import { Brain } from '../brain/brain'
+import { Brain, type ConceptRecord } from '../brain/brain'
 import { nomicEmbedder } from '../embed/embedder'
 import { importDirectory, type ImportProgress, type ImportResult } from '../corpus/import'
 import { classifyCourse } from '../corpus/course'
@@ -90,13 +90,22 @@ class StudyBrainService {
     this.importing = true
     try {
       const brain = await this.open()
-      return await importDirectory({
+      const result = await importDirectory({
         dir: this.corpusDir(),
         embedder: nomicEmbedder,
         writer: brain.corpusWriter,
         onProgress,
         limit
       })
+      // Load any shipped illustration bundle so students get illustrations for
+      // free (idempotent; a no-op when there's no bundle, e.g. on the builder).
+      try {
+        const lib = await this.importLibrary()
+        if (lib.concepts > 0) console.log(`[pgp] loaded ${lib.concepts} shipped illustrations (${lib.images} images)`)
+      } catch (e) {
+        console.error('[pgp] illustration bundle load failed:', e)
+      }
+      return result
     } finally {
       this.importing = false
     }
@@ -192,6 +201,12 @@ class StudyBrainService {
       const dataUrl = imageEngine.read(match.imageFile)
       if (dataUrl) return { id: spec.id, title: spec.title, dataUrl }
     }
+    // Shipped/student builds never generate: a library miss is just a miss,
+    // even if a stray OpenAI key sits on the machine. Generation is a
+    // builder-only capability (dev, or explicit opt-in).
+    if (!this.imageGenEnabled()) {
+      return { id: spec.id, title: spec.title, error: 'not in the illustration library' }
+    }
     if (!imageEngine.isAvailable()) {
       return { id: spec.id, title: spec.title, error: 'image generator not available' }
     }
@@ -253,6 +268,82 @@ class StudyBrainService {
 
   illustrationsDir(): string {
     return join(app.getPath('userData'), 'illustrations')
+  }
+
+  /**
+   * Whether this build may GENERATE new illustrations. Off by default in a
+   * packaged (student) build so a library miss never spends image credits;
+   * on in dev, or with an explicit opt-in. `PGP_DISABLE_IMAGE_GEN=1` forces it
+   * off even in dev (used to smoke-test the student experience).
+   */
+  imageGenEnabled(): boolean {
+    if (process.env['PGP_DISABLE_IMAGE_GEN'] === '1') return false
+    if (process.env['PGP_ENABLE_IMAGE_GEN'] === '1') return true
+    return !app.isPackaged
+  }
+
+  /** Where the shippable illustration bundle lives — a sibling of the corpus
+   *  markdown dir, so it travels with the corpus repo (images + concepts.json). */
+  private libraryBundleDir(): string {
+    return join(dirname(this.corpusDir()), 'illustrations')
+  }
+
+  /**
+   * Publish the concept library into the corpus bundle: copy every image and
+   * write concepts.json (key, title, course, composition, image_file, and the
+   * EMBEDDING). Students import this so their app reuses the same illustrations
+   * with no image generation. Builder-only.
+   */
+  async publishLibrary(): Promise<{ concepts: number; images: number; dir: string }> {
+    const brain = await this.open()
+    const concepts = await brain.exportConcepts()
+    const bundle = this.libraryBundleDir()
+    const imagesDir = join(bundle, 'images')
+    mkdirSync(imagesDir, { recursive: true })
+    let images = 0
+    for (const c of concepts) {
+      const src = join(this.illustrationsDir(), c.imageFile)
+      if (existsSync(src)) {
+        copyFileSync(src, join(imagesDir, c.imageFile))
+        images++
+      }
+    }
+    writeFileSync(join(bundle, 'concepts.json'), JSON.stringify(concepts, null, 2))
+    return { concepts: concepts.length, images, dir: bundle }
+  }
+
+  /**
+   * Load a shipped illustration bundle (if present) into this install: copy the
+   * images into the local illustrations dir and upsert the concepts (with their
+   * shipped embeddings — no re-embedding). Idempotent. Called after import so a
+   * student gets illustrations for free.
+   */
+  async importLibrary(): Promise<{ concepts: number; images: number }> {
+    const bundle = this.libraryBundleDir()
+    const manifest = join(bundle, 'concepts.json')
+    if (!existsSync(manifest)) return { concepts: 0, images: 0 }
+    let concepts: ConceptRecord[]
+    try {
+      concepts = JSON.parse(readFileSync(manifest, 'utf8')) as ConceptRecord[]
+    } catch {
+      return { concepts: 0, images: 0 }
+    }
+    const brain = await this.open()
+    const destDir = this.illustrationsDir()
+    mkdirSync(destDir, { recursive: true })
+    let images = 0
+    let loaded = 0
+    for (const c of concepts) {
+      if (!c.imageFile || !Array.isArray(c.embedding)) continue
+      const src = join(bundle, 'images', c.imageFile)
+      if (existsSync(src)) {
+        copyFileSync(src, join(destDir, c.imageFile))
+        images++
+      }
+      await brain.upsertConcept(c)
+      loaded++
+    }
+    return { concepts: loaded, images }
   }
 
   async lessonTitles(courseCode: string): Promise<string[]> {
