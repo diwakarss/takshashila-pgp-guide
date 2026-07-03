@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react'
-import { CheckSquare, Search, NotebookPen, FileText } from 'lucide-react'
+import { Search, NotebookPen, FileText } from 'lucide-react'
 import { Sidebar } from './components/Sidebar'
 import { TopBar } from './components/TopBar'
 import { Tutor } from './tabs/Tutor'
+import { Quiz } from './tabs/Quiz'
 import { Settings } from './tabs/Settings'
 import { Placeholder } from './tabs/Placeholder'
 import { useSystemStatus } from './hooks/useSystemStatus'
@@ -64,11 +65,11 @@ export function App(): JSX.Element {
             />
           )}
           {tab === 'quiz' && (
-            <Placeholder
-              title="Quiz"
-              line="Test yourself with graded, cited questions across formats — and watch your streak grow."
-              icon={CheckSquare}
-              accent="#1d8a66"
+            <Quiz
+              ready={status.ready}
+              engine={status.engine}
+              courses={courses}
+              onGoToSettings={() => setTab('settings')}
             />
           )}
           {tab === 'research' && (

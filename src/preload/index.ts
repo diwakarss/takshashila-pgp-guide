@@ -12,6 +12,9 @@ import {
   type IllustrationSpec,
   type ImportProgress,
   type ImportResult,
+  type QuizQuestion,
+  type QuizSpec,
+  type QuizVerdict,
   type SearchHit,
   type Thread,
   type ThreadDetail
@@ -34,6 +37,9 @@ const api = {
   listThreads: (tab = 'tutor'): Promise<Thread[]> => ipcRenderer.invoke(IPC.threadsList, tab),
   getThread: (id: string): Promise<ThreadDetail | null> => ipcRenderer.invoke(IPC.threadGet, id),
   deleteThread: (id: string): Promise<void> => ipcRenderer.invoke(IPC.threadDelete, id),
+  generateQuiz: (spec: QuizSpec): Promise<QuizQuestion[]> => ipcRenderer.invoke(IPC.quizGenerate, spec),
+  gradeQuiz: (question: { prompt: string; modelAnswer: string }, answer: string): Promise<QuizVerdict> =>
+    ipcRenderer.invoke(IPC.quizGrade, { question, answer }),
   illustrationAvailable: (): Promise<boolean> => ipcRenderer.invoke(IPC.illustrationAvailable),
   generateIllustration: (spec: IllustrationSpec, courseCode?: string): Promise<IllustrationImage> =>
     ipcRenderer.invoke(IPC.illustrationGenerate, { spec, courseCode }),

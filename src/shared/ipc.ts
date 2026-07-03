@@ -35,6 +35,10 @@ export const IPC = {
   threadGet: 'thread:get',
   /** Delete a thread. */
   threadDelete: 'thread:delete',
+  /** Generate a quiz (MCQ + free-form) from a course. */
+  quizGenerate: 'quiz:generate',
+  /** Grade a free-form quiz answer against the source. */
+  quizGrade: 'quiz:grade',
   /** Is on-demand illustration generation available on this machine? */
   illustrationAvailable: 'illustration:available',
   /** Generate (or return cached) one illustration; resolves to a data URL or an error reason. */
@@ -129,6 +133,22 @@ export type ThreadDetail = Thread & { turns: Turn[] }
 
 /** Asking returns the (possibly new) thread id and the appended turn. */
 export type AskResult = { threadId: string; turn: Turn }
+
+// ── quiz ────────────────────────────────────────────────────────────────
+export type QuizQuestion = {
+  id: string
+  kind: 'mcq' | 'freeform'
+  prompt: string
+  options: string[] // mcq only (4)
+  answerIndex: number // mcq only; -1 for free-form
+  modelAnswer: string // free-form only
+  explanation: string
+  source: string | null // lesson title the question tests
+}
+
+export type QuizSpec = { courseCode?: string; count?: number }
+
+export type QuizVerdict = { verdict: 'correct' | 'partial' | 'incorrect'; feedback: string }
 
 /** Either a generated image (dataUrl) or a reason it couldn't be made. */
 export type IllustrationImage = {

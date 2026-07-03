@@ -6,7 +6,7 @@ import { studyBrain } from './services/studyBrain'
 import { agentCliEngine } from './engine/agentCli'
 import { imageEngine } from './illustrate/imageEngine'
 import { extractConcepts } from './illustrate/extract'
-import type { AskRequest, IllustrationImage, IllustrationSpec } from '../shared/ipc'
+import type { AskRequest, IllustrationImage, IllustrationSpec, QuizSpec } from '../shared/ipc'
 
 // Builder batch: pre-generate the illustration library for the real courses.
 // PGP_DEV_BUILD_LIBRARY=1 (PGP_DEV_CLEAR_LIBRARY=1 to wipe first after a style
@@ -155,6 +155,11 @@ function registerIpc(): void {
   ipcMain.handle(IPC.threadGet, (_e, id: string) => studyBrain.getThread(id))
   ipcMain.handle(IPC.threadDelete, (_e, id: string) => studyBrain.deleteThread(id))
 
+  ipcMain.handle(IPC.quizGenerate, (_e, spec: QuizSpec) => studyBrain.generateQuiz(spec))
+  ipcMain.handle(IPC.quizGrade, (_e, req: { question: { prompt: string; modelAnswer: string }; answer: string }) =>
+    studyBrain.gradeQuizAnswer(req.question, req.answer)
+  )
+
   ipcMain.handle(IPC.illustrationAvailable, () => imageEngine.isAvailable())
 
   ipcMain.handle(
@@ -174,6 +179,26 @@ app.whenReady().then(() => {
 
   if (process.env['PGP_DEV_BUILD_LIBRARY']) {
     void buildLibrary().catch((e) => console.error('[lib] build failed:', e))
+  }
+
+  if (process.env['PGP_DEV_QUIZ']) {
+    void (async () => {
+      const qs = await studyBrain.generateQuiz({ courseCode: process.env['PGP_DEV_QUIZ_COURSE'], count: 3 })
+      console.log(
+        `[quiz] generated ${qs.length}:`,
+        JSON.stringify(
+          qs.map((q) => ({ k: q.kind, p: q.prompt.slice(0, 70), ans: q.kind === 'mcq' ? q.options[q.answerIndex] : 'freeform', src: q.source }))
+        )
+      )
+      const ff = qs.find((x) => x.kind === 'freeform')
+      if (ff) {
+        const v = await studyBrain.gradeQuizAnswer(
+          { prompt: ff.prompt, modelAnswer: ff.modelAnswer },
+          'A rough partial answer that touches one relevant point but misses the detail.'
+        )
+        console.log('[quiz] grade sample:', JSON.stringify(v))
+      }
+    })().catch((e) => console.error('[quiz] failed:', e))
   }
 
   // Dev diagnostic: PGP_DEV_AUTOIMPORT=<n> runs a small import on startup and

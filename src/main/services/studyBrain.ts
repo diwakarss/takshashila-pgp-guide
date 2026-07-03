@@ -9,6 +9,7 @@ import { classifyCourse } from '../corpus/course'
 import { imageEngine } from '../illustrate/imageEngine'
 import { agentCliEngine } from '../engine/agentCli'
 import { runTutor, summariseReply, type TurnContext } from './tutor'
+import { generateQuiz, gradeFreeform } from './quiz'
 import type {
   AskRequest,
   AskResult,
@@ -17,6 +18,9 @@ import type {
   CourseSummary,
   IllustrationImage,
   IllustrationSpec,
+  QuizQuestion,
+  QuizSpec,
+  QuizVerdict,
   SearchHit,
   Thread,
   ThreadDetail
@@ -156,6 +160,17 @@ class StudyBrainService {
   async deleteThread(id: string): Promise<void> {
     const brain = await this.open()
     await brain.deleteThread(id)
+  }
+
+  // ── quiz ──────────────────────────────────────────────────────────────
+
+  async generateQuiz(spec: QuizSpec): Promise<QuizQuestion[]> {
+    await this.open()
+    return generateQuiz(spec, { search: (q, l, c) => this.search(q, l, c), engine: agentCliEngine })
+  }
+
+  async gradeQuizAnswer(question: { prompt: string; modelAnswer: string }, answer: string): Promise<QuizVerdict> {
+    return gradeFreeform(question, answer, agentCliEngine)
   }
 
   /**
