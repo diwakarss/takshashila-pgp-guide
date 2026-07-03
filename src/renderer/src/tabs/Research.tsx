@@ -1,11 +1,12 @@
 import { useEffect, useRef, useState } from 'react'
 import { Search, ExternalLink, Users, Scale, Table2, Clock } from 'lucide-react'
-import { Md, toSuperscriptCitations } from '../components/Markdown'
-import { useNotebookCapture, selectionCapture, type CaptureFn } from '../lib/capture'
-import type { EngineStatus, LensKind, LensReply, NoteSource, ResearchSource, SourceType, ThreadDetail, Turn } from '../../../shared/ipc'
+import { Md, Cite } from '../components/Markdown'
+import { useNotebookCapture, selectionCapture, type CaptureFn, type NumberedSource } from '../lib/capture'
+import type { EngineStatus, LensKind, LensReply, ResearchSource, SourceType, ThreadDetail, Turn } from '../../../shared/ipc'
 
-const toNoteSources = (sources: ResearchSource[]): NoteSource[] =>
-  sources.map((s) => ({ title: s.title, url: s.url, kind: s.type }))
+// Pair each source with its citation number so a capture keeps only cited ones.
+const numberedSources = (sources: ResearchSource[]): NumberedSource[] =>
+  sources.map((s) => ({ n: s.n, note: { title: s.title, url: s.url, kind: s.type } }))
 
 const LENS_BAR: { kind: LensKind; label: string; icon: typeof Users }[] = [
   { kind: 'stakeholders', label: 'Stakeholder map', icon: Users },
@@ -224,9 +225,9 @@ function ResearchTurnView(props: {
   return (
     <div className="turn">
       <div className="turn-q">{turn.question}</div>
-      <div className="turn-a" onMouseUp={selectionCapture(toNoteSources(a.sources), from, onCapture)}>
+      <div className="turn-a" onMouseUp={selectionCapture(numberedSources(a.sources), from, onCapture)}>
         <div className="answer-md">
-          <Md>{toSuperscriptCitations(a.synthesis)}</Md>
+          <Md>{a.synthesis}</Md>
         </div>
         {a.sources.length > 0 && <ResearchSources sources={a.sources} />}
         <div className="lens-bar">
@@ -251,12 +252,12 @@ function ResearchTurnView(props: {
 function LensView({ lens, onCapture }: { lens: LensReply; onCapture: CaptureFn }): JSX.Element {
   return (
     <div className="turn">
-      <div className="turn-a" onMouseUp={selectionCapture(toNoteSources(lens.sources), lens.title, onCapture)}>
+      <div className="turn-a" onMouseUp={selectionCapture(numberedSources(lens.sources), lens.title, onCapture)}>
         <div className="lens-card">
           <div className="lens-head">{lens.title}</div>
           {lens.intro && (
             <div className="answer-md lens-intro">
-              <Md>{toSuperscriptCitations(lens.intro)}</Md>
+              <Md>{lens.intro}</Md>
             </div>
           )}
 
@@ -266,7 +267,9 @@ function LensView({ lens, onCapture }: { lens: LensReply; onCapture: CaptureFn }
                 <div className="lens-side-head">For</div>
                 <ul>
                   {lens.sides.for.map((p, i) => (
-                    <li key={i}>{toSuperscriptCitations(p)}</li>
+                    <li key={i}>
+                      <Cite>{p}</Cite>
+                    </li>
                   ))}
                 </ul>
               </div>
@@ -274,7 +277,9 @@ function LensView({ lens, onCapture }: { lens: LensReply; onCapture: CaptureFn }
                 <div className="lens-side-head">Against</div>
                 <ul>
                   {lens.sides.against.map((p, i) => (
-                    <li key={i}>{toSuperscriptCitations(p)}</li>
+                    <li key={i}>
+                      <Cite>{p}</Cite>
+                    </li>
                   ))}
                 </ul>
               </div>
@@ -295,7 +300,9 @@ function LensView({ lens, onCapture }: { lens: LensReply; onCapture: CaptureFn }
                   {lens.table.rows.map((row, ri) => (
                     <tr key={ri}>
                       {row.map((cell, ci) => (
-                        <td key={ci}>{toSuperscriptCitations(cell)}</td>
+                        <td key={ci}>
+                          <Cite>{cell}</Cite>
+                        </td>
                       ))}
                     </tr>
                   ))}

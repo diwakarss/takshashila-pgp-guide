@@ -1,13 +1,12 @@
 import { useEffect, useRef, useState } from 'react'
 import { BookOpen, Pencil, ChevronLeft, ChevronRight } from 'lucide-react'
-import { Md, toSuperscriptCitations } from '../components/Markdown'
-import { useNotebookCapture, selectionCapture, type CaptureFn } from '../lib/capture'
+import { Md } from '../components/Markdown'
+import { useNotebookCapture, selectionCapture, type CaptureFn, type NumberedSource } from '../lib/capture'
 import type {
   CourseSummary,
   EngineStatus,
   IllustrationImage,
   IllustrationSpec,
-  NoteSource,
   SearchHit,
   ThreadDetail,
   Turn,
@@ -16,9 +15,10 @@ import type {
 
 type IllusEntry = { status: 'drawing' | 'done' | 'error'; dataUrl?: string; error?: string; quota?: boolean }
 
-// Tutor sources are course lessons (no web url) — carry them as corpus citations.
-const corpusSources = (hits: SearchHit[]): NoteSource[] =>
-  hits.map((h) => ({ title: h.title ?? h.slug, kind: 'corpus' }))
+// Tutor sources are course lessons (no web url) cited [n] by position — carry
+// them as numbered corpus sources so a capture keeps only the cited ones.
+const numberedCorpus = (hits: SearchHit[]): NumberedSource[] =>
+  hits.map((h, i) => ({ n: i + 1, note: { title: h.title ?? h.slug, kind: 'corpus' } }))
 
 // Tutor — a threaded conversation. The whole thread scrolls as one (turns +
 // follow-ups). A concept reply is a paginated slide deck (Back/Next); a simple
@@ -235,7 +235,7 @@ function TurnView(props: {
   return (
     <div className="turn">
       <div className="turn-q">{turn.question}</div>
-      <div className="turn-a" onMouseUp={selectionCapture(corpusSources(a.sources), `Tutor: ${turn.question}`, onCapture)}>
+      <div className="turn-a" onMouseUp={selectionCapture(numberedCorpus(a.sources), `Tutor: ${turn.question}`, onCapture)}>
         {a.kind === 'slides' && cur ? (
           <div className="slide-card">
             <h3 className="slide-heading">{cur.heading}</h3>
@@ -243,7 +243,7 @@ function TurnView(props: {
               <Illustration spec={cur.illustration} entry={illus[`${turn.id}:${cur.illustration.id}`]} />
             )}
             <div className="answer-md">
-              <Md>{toSuperscriptCitations(cur.body)}</Md>
+              <Md>{cur.body}</Md>
             </div>
             {slides.length > 1 && (
               <nav className="slide-nav">
@@ -261,7 +261,7 @@ function TurnView(props: {
           </div>
         ) : (
           <div className="answer-md">
-            <Md>{toSuperscriptCitations(a.text)}</Md>
+            <Md>{a.text}</Md>
           </div>
         )}
         {a.sources.length > 0 && <Sources sources={a.sources} />}

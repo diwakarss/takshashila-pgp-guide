@@ -16,6 +16,7 @@ export function Notebook(props: { version: number }): JSX.Element {
   const [body, setBody] = useState('')
   const [saveState, setSaveState] = useState<'idle' | 'saving' | 'saved'>('idle')
   const [confirmDelete, setConfirmDelete] = useState(false)
+  const [hovered, setHovered] = useState<string | null>(null) // snippet id under the cursor
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const refresh = (q = query): void => {
@@ -77,7 +78,12 @@ export function Notebook(props: { version: number }): JSX.Element {
     refresh()
   }
 
+  const sourceKey = (s: NoteSource): string => (s.url || s.title).toLowerCase()
   const bibliography = dedupeSources(page?.snippets.flatMap((s) => s.sources) ?? [])
+  // Keys of the sources belonging to the hovered snippet (to highlight them).
+  const hoveredKeys = hovered
+    ? new Set((page?.snippets.find((s) => s.id === hovered)?.sources ?? []).map(sourceKey))
+    : null
 
   return (
     <div className="notebook">
@@ -154,7 +160,12 @@ export function Notebook(props: { version: number }): JSX.Element {
               <div className="nb-snippets">
                 <div className="recents-label">Captured from research</div>
                 {page.snippets.map((s) => (
-                  <blockquote key={s.id} className="nb-snippet answer-md">
+                  <blockquote
+                    key={s.id}
+                    className={`nb-snippet answer-md${hovered === s.id ? ' active' : ''}`}
+                    onMouseEnter={() => setHovered(s.id)}
+                    onMouseLeave={() => setHovered(null)}
+                  >
                     <Md>{s.text}</Md>
                     <footer className="muted small">
                       {s.from}
@@ -169,8 +180,11 @@ export function Notebook(props: { version: number }): JSX.Element {
               <div className="nb-biblio">
                 <div className="recents-label">Sources / bibliography</div>
                 <ol className="source-list">
-                  {bibliography.map((s, i) => (
-                    <li key={i} className="source-line">
+                  {bibliography.map((s, i) => {
+                    const on = hoveredKeys?.has(sourceKey(s))
+                    const cls = hoveredKeys ? (on ? ' highlight' : ' dim') : ''
+                    return (
+                    <li key={i} className={`source-line${cls}`}>
                       <span className="source-num">{i + 1}</span>
                       {s.url ? (
                         <a className="source-line-title" href={s.url} target="_blank" rel="noreferrer" title={s.url}>
@@ -182,7 +196,8 @@ export function Notebook(props: { version: number }): JSX.Element {
                       )}
                       <span className={`src-badge ${s.kind}`}>{s.kind}</span>
                     </li>
-                  ))}
+                    )
+                  })}
                 </ol>
               </div>
             )}

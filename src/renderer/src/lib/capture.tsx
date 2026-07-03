@@ -1,22 +1,33 @@
 import { useState, type MouseEvent as ReactMouseEvent } from 'react'
 import { BookmarkPlus } from 'lucide-react'
 import { Md } from '../components/Markdown'
-import { selectionToMarkdown } from './selection'
+import { captureSelection } from './selection'
 import type { NotebookPageSummary, NoteSource } from '../../../shared/ipc'
 
 // Shared "highlight → Notebook" capture, used by Research and Tutor. A selection
-// inside an answer becomes a Markdown snippet (structure preserved); a floating
-// pill offers to save it to a chosen/new Notebook page, carrying its sources.
+// inside an answer becomes a Markdown snippet (structure preserved), carrying
+// ONLY the sources it cites; a floating pill offers to save it to a page.
 
 export type Capture = { text: string; sources: NoteSource[]; from: string }
 export type CaptureFn = (capture: Capture, x: number, y: number) => void
 
-/** onMouseUp handler for an answer container: turn a selection into a capture. */
-export function selectionCapture(sources: NoteSource[], from: string, onCapture: CaptureFn): (e: ReactMouseEvent) => void {
+// A source paired with its citation number [n] within the answer, so a capture
+// keeps only the sources actually cited in the selected span.
+export type NumberedSource = { n: number; note: NoteSource }
+
+/** onMouseUp handler for an answer container: turn a selection into a capture,
+ *  carrying only the sources whose [n] appears in the selected text. */
+export function selectionCapture(
+  numbered: NumberedSource[],
+  from: string,
+  onCapture: CaptureFn
+): (e: ReactMouseEvent) => void {
   return (e) => {
-    const text = selectionToMarkdown()
-    if (text.length < 3) return
-    onCapture({ text, sources, from }, e.clientX, e.clientY)
+    const cap = captureSelection()
+    if (!cap || cap.markdown.length < 3) return
+    const cited = new Set(cap.cites)
+    const sources = cited.size > 0 ? numbered.filter((x) => cited.has(x.n)).map((x) => x.note) : []
+    onCapture({ text: cap.markdown, sources, from }, e.clientX, e.clientY)
   }
 }
 

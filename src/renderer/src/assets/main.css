@@ -1647,3 +1647,28 @@ a.source-line-title:hover {
   padding-top: 14px;
   border-top: 1px solid var(--hairline);
 }
+.nb-snippet.active {
+  border-left-color: var(--brand);
+  background: color-mix(in srgb, var(--brand) 5%, var(--parchment));
+}
+.nb-biblio .source-line {
+  border-radius: var(--radius-control);
+  padding: 3px 6px;
+  transition: background 120ms ease, opacity 120ms ease;
+}
+.nb-biblio .source-line.highlight {
+  background: color-mix(in srgb, var(--brand) 12%, transparent);
+}
+.nb-biblio .source-line.dim {
+  opacity: 0.4;
+}
+
+/* inline [n] citations */
+.cite {
+  font-size: 0.72em;
+  line-height: 0;
+  vertical-align: super;
+  color: var(--muted);
+  margin-left: 1px;
+  font-weight: 500;
+}
