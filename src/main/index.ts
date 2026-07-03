@@ -6,7 +6,7 @@ import { studyBrain } from './services/studyBrain'
 import { agentCliEngine } from './engine/agentCli'
 import { imageEngine } from './illustrate/imageEngine'
 import { extractConcepts } from './illustrate/extract'
-import type { AskRequest, IllustrationImage, IllustrationSpec, QuizResult, QuizSpec } from '../shared/ipc'
+import type { AskRequest, IllustrationImage, IllustrationSpec, QuizResult, QuizSpec, ResearchRequest } from '../shared/ipc'
 
 // Builder batch: pre-generate the illustration library for the real courses.
 // PGP_DEV_BUILD_LIBRARY=1 (PGP_DEV_CLEAR_LIBRARY=1 to wipe first after a style
@@ -151,6 +151,7 @@ function registerIpc(): void {
   ipcMain.handle(IPC.corpusCourses, () => studyBrain.courses())
 
   ipcMain.handle(IPC.tutorAsk, (_e, req: AskRequest) => studyBrain.ask(req))
+  ipcMain.handle(IPC.researchAsk, (_e, req: ResearchRequest) => studyBrain.research(req))
   ipcMain.handle(IPC.threadsList, (_e, tab?: string) => studyBrain.listThreads(tab))
   ipcMain.handle(IPC.threadGet, (_e, id: string) => studyBrain.getThread(id))
   ipcMain.handle(IPC.threadDelete, (_e, id: string) => studyBrain.deleteThread(id))
@@ -185,6 +186,19 @@ app.whenReady().then(() => {
 
   if (process.env['PGP_DEV_BUILD_LIBRARY']) {
     void buildLibrary().catch((e) => console.error('[lib] build failed:', e))
+  }
+
+  // Verify web research end-to-end: PGP_DEV_RESEARCH="a question".
+  if (process.env['PGP_DEV_RESEARCH']) {
+    void (async () => {
+      const { turn } = await studyBrain.research({ question: process.env['PGP_DEV_RESEARCH'] as string })
+      const a = turn.answer
+      if (a.kind !== 'research') return
+      console.log(`[research] synthesis (${a.synthesis.length} chars):`, a.synthesis.slice(0, 200))
+      console.log(`[research] ${a.sources.length} sources:`)
+      for (const s of a.sources) console.log(`[research]  [${s.n}] ${s.type.padEnd(10)} ${s.title.slice(0, 55)} — ${s.url}`)
+      console.log('[research] followups:', JSON.stringify(a.followups))
+    })().catch((e) => console.error('[research] failed:', e))
   }
 
   // Verify the gamification path end-to-end without leaving junk: record a few
@@ -300,14 +314,16 @@ app.whenReady().then(() => {
         if (process.env['PGP_DEV_AUTOASK']) {
           const { turn } = await studyBrain.ask({ question: process.env['PGP_DEV_AUTOASK'] })
           const ans = turn.answer
-          console.log(
-            `[pgp] dev reply kind=${ans.kind}:`,
-            ans.kind === 'slides'
-              ? JSON.stringify(ans.slides.map((s) => ({ h: s.heading, ill: s.illustration?.title ?? null })))
-              : ans.text.slice(0, 160)
-          )
-          console.log('[pgp] dev followups:', JSON.stringify(ans.followups))
-          console.log('[pgp] dev sources:', ans.sources.map((s) => s.title ?? s.slug).join(' | '))
+          if (ans.kind !== 'research') {
+            console.log(
+              `[pgp] dev reply kind=${ans.kind}:`,
+              ans.kind === 'slides'
+                ? JSON.stringify(ans.slides.map((s) => ({ h: s.heading, ill: s.illustration?.title ?? null })))
+                : ans.text.slice(0, 160)
+            )
+            console.log('[pgp] dev followups:', JSON.stringify(ans.followups))
+            console.log('[pgp] dev sources:', ans.sources.map((s) => s.title ?? s.slug).join(' | '))
+          }
           if (process.env['PGP_DEV_ILLUS'] && imageEngine.isAvailable() && ans.kind === 'slides') {
             for (const slide of ans.slides) {
               if (!slide.illustration) continue

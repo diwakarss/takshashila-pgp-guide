@@ -9,6 +9,7 @@ import { classifyCourse } from '../corpus/course'
 import { imageEngine } from '../illustrate/imageEngine'
 import { agentCliEngine } from '../engine/agentCli'
 import { runTutor, summariseReply, type TurnContext } from './tutor'
+import { runResearch } from './research'
 import { generateQuiz, gradeFreeform } from './quiz'
 import { xpForAttempt, levelFromXp, currentStreak, bestStreak, dayKey } from './gamify'
 import type {
@@ -22,6 +23,7 @@ import type {
   IllustrationSpec,
   QuizQuestion,
   QuizResult,
+  ResearchRequest,
   QuizSpec,
   QuizStats,
   QuizVerdict,
@@ -157,6 +159,26 @@ class StudyBrainService {
       { question: req.question, courseCode, history },
       { search: (q, l, c) => this.search(q, l, c), engine: agentCliEngine }
     )
+    const turn = await brain.appendTurn(threadId, { id: randomUUID(), question: req.question, answer: reply })
+    return { threadId, turn }
+  }
+
+  /** Ask a web research question in a thread (new if no threadId). Web-first,
+   *  no corpus retrieval — a separate conversation space from tutoring. */
+  async research(req: ResearchRequest): Promise<AskResult> {
+    const brain = await this.open()
+    let threadId = req.threadId
+    let history: TurnContext[] = []
+
+    if (threadId) {
+      const thread = await brain.getThread(threadId)
+      if (thread) history = thread.turns.map((t) => ({ question: t.question, summary: summariseReply(t.answer) }))
+    } else {
+      threadId = randomUUID()
+      await brain.createThread({ id: threadId, tab: 'research', courseCode: null, title: makeTitle(req.question) })
+    }
+
+    const reply = await runResearch({ question: req.question, history }, { engine: agentCliEngine })
     const turn = await brain.appendTurn(threadId, { id: randomUUID(), question: req.question, answer: reply })
     return { threadId, turn }
   }

@@ -29,6 +29,8 @@ export const IPC = {
   engineStatus: 'engine:status',
   /** Ask the tutor in a thread (new if no threadId); returns the appended turn. */
   tutorAsk: 'tutor:ask',
+  /** Ask a web research question in a thread (new if no threadId). */
+  researchAsk: 'research:ask',
   /** List saved conversation threads for a tab (Recents). */
   threadsList: 'threads:list',
   /** Load a full thread with its turns. */
@@ -126,7 +128,34 @@ export type TutorReply = {
   engineId: string
 }
 
-export type Turn = { id: string; question: string; answer: TutorReply; createdAt: string }
+// ── research (web-first, policy-focused) ──────────────────────────────────
+export type SourceType = 'government' | 'data' | 'academic' | 'thinktank' | 'news' | 'other'
+
+export type ResearchSource = {
+  n: number
+  title: string
+  url: string
+  type: SourceType
+  date?: string // publication date, YYYY or YYYY-MM, when known
+}
+
+// A research answer: a cited synthesis over web sources (numbered, type-graded),
+// with policy-oriented follow-ups. No corpus dependency, no illustrations.
+export type ResearchReply = {
+  kind: 'research'
+  synthesis: string // markdown with inline [n] citations
+  sources: ResearchSource[]
+  followups: string[]
+  engineId: string
+}
+
+export type ResearchRequest = { question: string; threadId?: string }
+
+// A turn's answer is a tutor reply (slides/text) or a research reply — both are
+// persisted in the same thread store, discriminated by `kind`.
+export type ThreadAnswer = TutorReply | ResearchReply
+
+export type Turn = { id: string; question: string; answer: ThreadAnswer; createdAt: string }
 
 export type Thread = {
   id: string

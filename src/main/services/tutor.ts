@@ -1,5 +1,5 @@
 import type { Engine, EngineMessage } from '../engine/types'
-import type { SearchHit, Slide, TutorReply } from '../../shared/ipc'
+import type { SearchHit, Slide, ThreadAnswer, TutorReply } from '../../shared/ipc'
 
 // Conversational tutoring. Each turn the model decides whether to TEACH a
 // concept as a slide deck or just answer a simple question as text. It grounds
@@ -152,8 +152,9 @@ export async function runTutor(input: TutorInput, deps: TutorDeps): Promise<Tuto
   }
 }
 
-/** Compact a reply for use as conversation context in later turns. */
-export function summariseReply(r: TutorReply): string {
+/** Compact a stored answer (tutor or research) for use as context in later turns. */
+export function summariseReply(r: ThreadAnswer): string {
+  if (r.kind === 'research') return truncate(r.synthesis, 400)
   if (r.kind === 'slides') return r.slides.map((s) => s.heading).join(' · ')
   return truncate(r.text, 400)
 }

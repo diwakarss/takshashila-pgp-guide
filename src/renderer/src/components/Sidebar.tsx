@@ -21,12 +21,12 @@ export function Sidebar(props: {
   const [threads, setThreads] = useState<Thread[]>([])
   const [quiz, setQuiz] = useState<QuizStats | null>(null)
 
-  const showRecents = active === 'tutor'
+  const showRecents = active === 'tutor' || active === 'research'
   const showQuiz = active === 'quiz'
 
   useEffect(() => {
-    if (showRecents) void window.pgp.listThreads('tutor').then(setThreads)
-  }, [showRecents, threadsVersion])
+    if (showRecents) void window.pgp.listThreads(active).then(setThreads)
+  }, [showRecents, active, threadsVersion])
 
   useEffect(() => {
     if (showQuiz) void window.pgp.quizStats().then(setQuiz)
@@ -67,11 +67,13 @@ export function Sidebar(props: {
         {showRecents && !collapsed && (
           <div className="recents">
             <button className="new-conv" onClick={() => onOpenThread(null)}>
-              <Plus size={15} /> New conversation
+              <Plus size={15} /> {active === 'research' ? 'New research' : 'New conversation'}
             </button>
             <div className="recents-label">Recents</div>
             <ul className="recents-list">
-              {threads.length === 0 && <li className="recents-empty">No conversations yet</li>}
+              {threads.length === 0 && (
+                <li className="recents-empty">{active === 'research' ? 'No research yet' : 'No conversations yet'}</li>
+              )}
               {threads.map((t) => (
                 <li key={t.id}>
                   <button

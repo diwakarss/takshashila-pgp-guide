@@ -1,9 +1,10 @@
 import { useEffect, useState } from 'react'
-import { Search, NotebookPen, FileText } from 'lucide-react'
+import { NotebookPen, FileText } from 'lucide-react'
 import { Sidebar } from './components/Sidebar'
 import { TopBar } from './components/TopBar'
 import { Tutor } from './tabs/Tutor'
 import { Quiz } from './tabs/Quiz'
+import { Research } from './tabs/Research'
 import { Settings } from './tabs/Settings'
 import { Placeholder } from './tabs/Placeholder'
 import { useSystemStatus } from './hooks/useSystemStatus'
@@ -16,6 +17,7 @@ export function App(): JSX.Element {
   const [tab, setTab] = useState<TabId>('tutor')
   const status = useSystemStatus()
   const [openThreadId, setOpenThreadId] = useState<string | null>(null)
+  const [openResearchId, setOpenResearchId] = useState<string | null>(null)
   const [threadsVersion, setThreadsVersion] = useState(0)
   const [quizStatsVersion, setQuizStatsVersion] = useState(0)
   const [courses, setCourses] = useState<CourseSummary[]>([])
@@ -25,10 +27,16 @@ export function App(): JSX.Element {
     if (status.ready) void window.pgp.courses().then(setCourses)
   }, [status.ready])
 
+  // Recents are shown for the active conversational tab, so opening one stays in
+  // that tab (Tutor and Research keep separate open-thread state).
   const openThread = (id: string | null): void => {
-    setTab('tutor')
-    setOpenThreadId(id)
+    if (tab === 'research') setOpenResearchId(id)
+    else {
+      setTab('tutor')
+      setOpenThreadId(id)
+    }
   }
+  const activeOpenThreadId = tab === 'research' ? openResearchId : openThreadId
   const threadsChanged = (): void => setThreadsVersion((v) => v + 1)
 
   // Choosing a course starts a new conversation in that course.
@@ -45,7 +53,7 @@ export function App(): JSX.Element {
         onNavigate={setTab}
         engine={status.engine}
         stats={status.stats}
-        openThreadId={openThreadId}
+        openThreadId={activeOpenThreadId}
         threadsVersion={threadsVersion}
         quizStatsVersion={quizStatsVersion}
         onOpenThread={openThread}
@@ -77,11 +85,13 @@ export function App(): JSX.Element {
             />
           )}
           {tab === 'research' && (
-            <Placeholder
-              title="Research"
-              line="Ask across the web and the course, get cited synthesis, and highlight findings into your notebook."
-              icon={Search}
-              accent="#b5781a"
+            <Research
+              ready={status.engine?.available ?? false}
+              engine={status.engine}
+              openThreadId={openResearchId}
+              onOpenThread={setOpenResearchId}
+              onThreadsChanged={threadsChanged}
+              onGoToSettings={() => setTab('settings')}
             />
           )}
           {tab === 'notebook' && (

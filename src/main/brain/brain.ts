@@ -1,7 +1,7 @@
 import { PGlite } from '@electric-sql/pglite'
 import { vector } from '@electric-sql/pglite/vector'
 import { SCHEMA_SQL, EMBED_DIM } from './schema'
-import type { QuizAttempt, Thread, ThreadDetail, Turn, TutorReply, WeakSpot } from '../../shared/ipc'
+import type { QuizAttempt, Thread, ThreadAnswer, ThreadDetail, Turn, WeakSpot } from '../../shared/ipc'
 
 export type Source = 'corpus' | 'private'
 
@@ -367,14 +367,14 @@ export class Brain {
   }
 
   private async turnsOf(threadId: string): Promise<Turn[]> {
-    const r = await this.db.query<{ id: string; question: string; answer: TutorReply; created_at: string }>(
+    const r = await this.db.query<{ id: string; question: string; answer: ThreadAnswer; created_at: string }>(
       `SELECT id, question, answer, created_at FROM turns WHERE thread_id = $1 ORDER BY ordinal`,
       [threadId]
     )
     return r.rows.map((t) => ({
       id: t.id,
       question: t.question,
-      answer: typeof t.answer === 'string' ? (JSON.parse(t.answer) as TutorReply) : t.answer,
+      answer: typeof t.answer === 'string' ? (JSON.parse(t.answer) as ThreadAnswer) : t.answer,
       createdAt: String(t.created_at)
     }))
   }
@@ -402,7 +402,7 @@ export class Brain {
   }
 
   /** Append a turn and bump the thread's updated_at, atomically. */
-  async appendTurn(threadId: string, turn: { id: string; question: string; answer: TutorReply }): Promise<Turn> {
+  async appendTurn(threadId: string, turn: { id: string; question: string; answer: ThreadAnswer }): Promise<Turn> {
     return this.db.transaction(async (tx) => {
       const ord = await tx.query<{ next: number }>(
         `SELECT COALESCE(max(ordinal), -1) + 1 AS next FROM turns WHERE thread_id = $1`,
