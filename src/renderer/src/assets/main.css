@@ -1532,6 +1532,27 @@ a.source-line-title:hover {
   border-radius: var(--radius-control);
   color: var(--muted);
 }
+/* the one search box, in the sidebar above the nav */
+.sidebar-search {
+  margin: 0 2px 12px;
+}
+/* notebook page item in the sidebar list: title + meta stacked */
+.nb-recent {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  white-space: normal;
+  height: auto;
+}
+.nb-recent-title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.nb-recent-meta {
+  font-size: 11px;
+  color: var(--muted);
+}
 .nb-search input {
   flex: 1;
   border: none;

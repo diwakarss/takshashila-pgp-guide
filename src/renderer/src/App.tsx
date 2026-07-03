@@ -19,6 +19,7 @@ export function App(): JSX.Element {
   const status = useSystemStatus()
   const [openThreadId, setOpenThreadId] = useState<string | null>(null)
   const [openResearchId, setOpenResearchId] = useState<string | null>(null)
+  const [openNotebookId, setOpenNotebookId] = useState<string | null>(null)
   const [threadsVersion, setThreadsVersion] = useState(0)
   const [quizStatsVersion, setQuizStatsVersion] = useState(0)
   const [notebookVersion, setNotebookVersion] = useState(0)
@@ -58,7 +59,11 @@ export function App(): JSX.Element {
         openThreadId={activeOpenThreadId}
         threadsVersion={threadsVersion}
         quizStatsVersion={quizStatsVersion}
+        openNotebookId={openNotebookId}
+        notebookVersion={notebookVersion}
         onOpenThread={openThread}
+        onOpenNotebook={setOpenNotebookId}
+        onNotebookChanged={() => setNotebookVersion((v) => v + 1)}
       />
       <div className="main-col">
         <TopBar tab={tab} courses={courses} course={course} onCourse={chooseCourse} />
@@ -98,7 +103,13 @@ export function App(): JSX.Element {
               onGoToSettings={() => setTab('settings')}
             />
           )}
-          {tab === 'notebook' && <Notebook version={notebookVersion} />}
+          {tab === 'notebook' && (
+            <Notebook
+              openId={openNotebookId}
+              onOpenNotebook={setOpenNotebookId}
+              onChanged={() => setNotebookVersion((v) => v + 1)}
+            />
+          )}
           {tab === 'projects' && (
             <Placeholder
               title="Projects"
