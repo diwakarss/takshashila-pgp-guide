@@ -10,7 +10,7 @@ import { imageEngine } from '../illustrate/imageEngine'
 import { agentCliEngine } from '../engine/agentCli'
 import { runTutor, summariseReply, type TurnContext } from './tutor'
 import { runResearch, runLens, lensTitle } from './research'
-import { runCoach, coachTitle } from './projectCoach'
+import { runCoach, coachTitle, runStepChat } from './projectCoach'
 import { generateQuiz, gradeFreeform } from './quiz'
 import { xpForAttempt, levelFromXp, currentStreak, bestStreak, dayKey } from './gamify'
 import type {
@@ -369,10 +369,56 @@ class StudyBrainService {
 
   async updateProject(
     id: string,
-    patch: { title?: string; draft?: string; step?: number; done?: number[] }
+    patch: {
+      title?: string
+      draft?: string
+      step?: number
+      done?: number[]
+      stepData?: Project['stepData']
+    }
   ): Promise<Project | null> {
     const brain = await this.open()
     return brain.updateProject(id, patch)
+  }
+
+  /** One turn of the guided per-step chat. No message = kickoff: the coach does
+   *  the step's legwork (researching the brief, suggesting sources…) and opens
+   *  the discussion. The exchange is persisted on the project. */
+  async projectChat(id: string, step: number, message?: string): Promise<Project | null> {
+    const brain = await this.open()
+    const p = await brain.getProject(id)
+    if (!p) return null
+    const key = String(step)
+    const cur = p.stepData[key] ?? { messages: [], notes: '' }
+    const history = [...cur.messages]
+    if (message?.trim()) history.push({ role: 'user', text: message.trim() })
+    const reply = await runStepChat(p, step, history, agentCliEngine)
+    const stepData = { ...p.stepData, [key]: { ...cur, messages: [...history, { role: 'coach' as const, text: reply }] } }
+    return brain.updateProject(id, { stepData })
+  }
+
+  /** Snapshot the working draft as a stored version; final replaces any prior final. */
+  async saveDraftVersion(id: string, title?: string, final = false): Promise<Project | null> {
+    const brain = await this.open()
+    const p = await brain.getProject(id)
+    if (!p || !p.draft.trim()) return p
+    const version = {
+      id: randomUUID(),
+      title: (title ?? '').trim() || `Draft ${p.drafts.length + 1}`,
+      text: p.draft,
+      final,
+      createdAt: new Date().toISOString()
+    }
+    let drafts = [...p.drafts, version]
+    if (final) drafts = drafts.map((d) => ({ ...d, final: d.id === version.id }))
+    return brain.updateProject(id, { drafts })
+  }
+
+  async setFinalDraft(id: string, draftId: string): Promise<Project | null> {
+    const brain = await this.open()
+    const p = await brain.getProject(id)
+    if (!p) return null
+    return brain.updateProject(id, { drafts: p.drafts.map((d) => ({ ...d, final: d.id === draftId })) })
   }
 
   async addProjectEvidence(

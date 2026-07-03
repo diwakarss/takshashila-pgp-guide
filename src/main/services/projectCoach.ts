@@ -1,5 +1,5 @@
 import type { Engine, EngineMessage } from '../engine/types'
-import type { CoachAction, CoachResult, Project } from '../../shared/ipc'
+import type { CoachAction, CoachResult, Project, ProjectMsg } from '../../shared/ipc'
 import { BARDACH_STEPS } from '../../shared/ipc'
 
 // The integrity core (PRD §8.5 / §9): the assistant COACHES — brainstorm,
@@ -72,6 +72,118 @@ export function buildCoachPrompt(project: Project, action: CoachAction): EngineM
     { role: 'system', content: NO_WRITE_SYSTEM },
     { role: 'user', content: `${projectContext(project)}\n\nTask: ${PROMPTS[action].ask}` }
   ]
+}
+
+// ── the guided per-step conversation ───────────────────────────────────────
+// Each Bardach step is a live discussion with the coach. The kickoff (first
+// message, no user input) has the coach do the step's legwork — research the
+// brief, suggest sources, propose criteria — then hand the thinking back to the
+// student with questions. Later turns continue the discussion. Notes from
+// completed steps are carried forward as context.
+
+type StepChatSpec = { kickoff: string; web: boolean }
+
+const STEP_CHAT: Record<string, StepChatSpec> = {
+  define: {
+    web: true,
+    kickoff:
+      'Research the assignment topic on the web FIRST. Open with a short, cited landscape of the situation (4-6 bullets, concrete figures where you can find them). Then ask the student 2-3 sharp questions that will help THEM define the problem precisely — what exactly, for whom, how big, measured how.'
+  },
+  evidence: {
+    web: true,
+    kickoff:
+      'Based on the brief and what the student decided in earlier steps, suggest 5-8 specific, authoritative sources or datasets (real URLs) they should gather — for each, say WHAT to look for in it. Prefer primary/official sources. Remind them to save the good ones with "Add evidence". End by asking what they found.'
+  },
+  alternatives: {
+    web: true,
+    kickoff:
+      'Help them construct alternatives: propose 3-4 candidate angles/options grounded in their earlier steps (always including the let-present-trends-continue baseline), one line each on why it is interesting. Then ask which they want to develop and why.'
+  },
+  criteria: {
+    web: false,
+    kickoff:
+      'Propose the judgment criteria that fit THIS assignment (e.g. effectiveness, cost, equity, feasibility, administrative ease) applied concretely to their topic. Ask which 2-3 they will use and what evidence would score them.'
+  },
+  outcomes: {
+    web: true,
+    kickoff:
+      'For the alternatives they chose (see context), sketch HOW to project outcomes: the mechanisms to trace, the magnitudes worth looking up, the second-order effects to watch. Then ask them to attempt the projections — you check their reasoning, you do not write conclusions for them.'
+  },
+  tradeoffs: {
+    web: false,
+    kickoff:
+      'Set up the trade-off confrontation: for their front-runner options, name the axes where they genuinely conflict (who gains, who bears the cost). Ask which trade-offs they are willing to accept and why.'
+  },
+  decide: {
+    web: false,
+    kickoff:
+      'Play the sceptical examiner: ask the 3-4 hardest questions about the position they are leaning towards, grounded in their own evidence. Help them stress-test the decision, not make it for them.'
+  },
+  story: {
+    web: false,
+    kickoff:
+      'Coach the STRUCTURE of the deliverable (for a 2-minute video: ~15s hook, ~60s core mechanism with the key shifts, ~30s spillovers, ~15s takeaway — adapt to their case). Give beats and structure, never script text. Ask what their opening line will be, then react to their attempts.'
+  }
+}
+
+function truncate(s: string, max: number): string {
+  return s.length > max ? s.slice(0, max) + '…' : s
+}
+
+function stepContext(p: Project, step: number): string {
+  const parts = [
+    `Project: ${p.title}`,
+    `Deliverable: ${p.deliverable}`,
+    `Brief: ${p.brief || '(personal writing — no set brief)'}`
+  ]
+  // Carry forward the student's takeaways from earlier steps — the thread of
+  // their thinking across the flow.
+  const takeaways = BARDACH_STEPS.map((s, i) => ({ s, i, notes: p.stepData[String(i)]?.notes?.trim() }))
+    .filter((x) => x.i !== step && x.notes)
+    .map((x) => `- Step ${x.i + 1} (${x.s.title}): ${truncate(x.notes as string, 500)}`)
+  if (takeaways.length) parts.push(`The student's takeaways so far:\n${takeaways.join('\n')}`)
+  if (p.evidence.length) parts.push(`Evidence gathered:\n${p.evidence.map((e) => `- ${e.title} (${e.note})`).join('\n')}`)
+  if (p.draft.trim()) parts.push(`Their current working draft (THEIR words):\n"""\n${truncate(p.draft, 3000)}\n"""`)
+  const cur = BARDACH_STEPS[step]
+  parts.push(`Current step: ${step + 1}. ${cur.title} — guide: ${cur.guide} — India lens: ${cur.lens}`)
+  return parts.join('\n\n')
+}
+
+export function buildStepChatPrompt(project: Project, step: number, history: ProjectMsg[]): EngineMessage[] {
+  const spec = STEP_CHAT[BARDACH_STEPS[step].key]
+  const messages: EngineMessage[] = [
+    { role: 'system', content: NO_WRITE_SYSTEM },
+    { role: 'user', content: stepContext(project, step) }
+  ]
+  if (history.length === 0) {
+    messages.push({ role: 'user', content: `Open this step's discussion. ${spec.kickoff}` })
+  } else {
+    messages.push({
+      role: 'assistant',
+      content: 'Understood — I am coaching this step with that context.'
+    })
+    for (const m of history.slice(-12)) {
+      messages.push({ role: m.role === 'user' ? 'user' : 'assistant', content: truncate(m.text, 2000) })
+    }
+  }
+  return messages
+}
+
+export function stepUsesWeb(step: number): boolean {
+  return STEP_CHAT[BARDACH_STEPS[step].key]?.web ?? false
+}
+
+export async function runStepChat(
+  project: Project,
+  step: number,
+  history: ProjectMsg[],
+  engine: Engine
+): Promise<string> {
+  const raw = await engine.complete(buildStepChatPrompt(project, step, history), {
+    webSearch: stepUsesWeb(step) || history.length === 0,
+    timeoutMs: 180_000
+  })
+  return raw.trim()
 }
 
 export async function runCoach(project: Project, action: CoachAction, engine: Engine): Promise<CoachResult> {

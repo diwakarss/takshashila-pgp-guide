@@ -208,6 +208,15 @@ function registerIpc(): void {
   ipcMain.handle(IPC.projectCoach, (_e, req: { id: string; action: CoachAction }) =>
     studyBrain.projectCoach(req.id, req.action)
   )
+  ipcMain.handle(IPC.projectChat, (_e, req: { id: string; step: number; message?: string }) =>
+    studyBrain.projectChat(req.id, req.step, req.message)
+  )
+  ipcMain.handle(IPC.projectSaveVersion, (_e, req: { id: string; title?: string; final?: boolean }) =>
+    studyBrain.saveDraftVersion(req.id, req.title, req.final)
+  )
+  ipcMain.handle(IPC.projectSetFinal, (_e, req: { id: string; draftId: string }) =>
+    studyBrain.setFinalDraft(req.id, req.draftId)
+  )
 
   ipcMain.handle(IPC.settingsGet, () => getSettings())
   ipcMain.handle(IPC.settingsSet, (_e, patch: Partial<AppSettings>) => setSettings(patch))
@@ -318,9 +327,24 @@ app.whenReady().then(() => {
       const ov2 = await studyBrain.projectsOverview()
       console.log('[proj] after update, assignment started/progress:', JSON.stringify(ov2.assignments.map((a) => ({ s: a.started, p: Math.round(a.progress * 100) }))))
       if (process.env['PGP_DEV_PROJECT_COACH']) {
-        const c = await studyBrain.projectCoach(p!.id, 'brainstorm')
-        console.log(`[proj] coach ${c.title} (blocked=${c.blocked}):`, c.markdown.slice(0, 160))
+        // Guided flow: kickoff chat on step 0 (coach researches + opens)…
+        let cp = await studyBrain.projectChat(p!.id, 0)
+        const kick = cp?.stepData['0']?.messages ?? []
+        console.log(`[proj] chat kickoff → ${kick.length} msgs; coach opens:`, kick[kick.length - 1]?.text.slice(0, 180))
+        // …a takeaway note that must carry into the next step's context…
+        await studyBrain.updateProject(p!.id, {
+          stepData: { ...cp!.stepData, '0': { ...cp!.stepData['0'], notes: 'Focus: diesel + fertiliser markets in India.' } }
+        })
+        cp = await studyBrain.projectChat(p!.id, 1, 'What sources should I start with?')
+        const ev = cp?.stepData['1']?.messages ?? []
+        console.log(`[proj] step-2 chat → ${ev.length} msgs; reply:`, ev[ev.length - 1]?.text.slice(0, 180))
       }
+      // Draft versions: save two, mark the second final.
+      await studyBrain.updateProject(p!.id, { draft: 'v1 script text' })
+      await studyBrain.saveDraftVersion(p!.id, 'First cut')
+      await studyBrain.updateProject(p!.id, { draft: 'v2 tighter script' })
+      const withFinal = await studyBrain.saveDraftVersion(p!.id, 'Tighter', true)
+      console.log('[proj] drafts:', JSON.stringify(withFinal?.drafts.map((d) => ({ t: d.title, f: d.final }))))
       await studyBrain.deleteProject(p!.id)
       console.log('[proj] cleaned up')
     })().catch((e) => console.error('[proj] failed:', e))

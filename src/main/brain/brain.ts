@@ -6,7 +6,9 @@ import type {
   NotebookPage,
   NotebookPageSummary,
   Project,
+  ProjectDraftVersion,
   ProjectEvidence,
+  ProjectStepState,
   QuizAttempt,
   Thread,
   ThreadAnswer,
@@ -465,6 +467,8 @@ export class Brain {
     step: number
     done: unknown
     evidence: unknown
+    step_data?: unknown
+    drafts?: unknown
     created_at: string
     updated_at: string
   }): Project {
@@ -485,6 +489,8 @@ export class Brain {
       step: Number(p.step),
       done: parse<number[]>(p.done, []),
       evidence: parse<ProjectEvidence[]>(p.evidence, []),
+      stepData: parse<Record<string, ProjectStepState>>(p.step_data, {}),
+      drafts: parse<ProjectDraftVersion[]>(p.drafts, []),
       createdAt: String(p.created_at),
       updatedAt: String(p.updated_at)
     }
@@ -521,7 +527,15 @@ export class Brain {
 
   async updateProject(
     id: string,
-    patch: { title?: string; draft?: string; step?: number; done?: number[]; evidence?: ProjectEvidence[] }
+    patch: {
+      title?: string
+      draft?: string
+      step?: number
+      done?: number[]
+      evidence?: ProjectEvidence[]
+      stepData?: Record<string, ProjectStepState>
+      drafts?: ProjectDraftVersion[]
+    }
   ): Promise<Project | null> {
     const cur = await this.getProject(id)
     if (!cur) return null
@@ -530,11 +544,22 @@ export class Brain {
       draft: patch.draft ?? cur.draft,
       step: patch.step ?? cur.step,
       done: patch.done ?? cur.done,
-      evidence: patch.evidence ?? cur.evidence
+      evidence: patch.evidence ?? cur.evidence,
+      stepData: patch.stepData ?? cur.stepData,
+      drafts: patch.drafts ?? cur.drafts
     }
     await this.db.query(
-      `UPDATE projects SET title=$2, draft=$3, step=$4, done=$5, evidence=$6, updated_at=now() WHERE id=$1`,
-      [id, next.title, next.draft, next.step, JSON.stringify(next.done), JSON.stringify(next.evidence)]
+      `UPDATE projects SET title=$2, draft=$3, step=$4, done=$5, evidence=$6, step_data=$7, drafts=$8, updated_at=now() WHERE id=$1`,
+      [
+        id,
+        next.title,
+        next.draft,
+        next.step,
+        JSON.stringify(next.done),
+        JSON.stringify(next.evidence),
+        JSON.stringify(next.stepData),
+        JSON.stringify(next.drafts)
+      ]
     )
     return this.getProject(id)
   }

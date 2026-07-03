@@ -71,8 +71,14 @@ const api = {
   createPersonalProject: (title: string): Promise<Project> => ipcRenderer.invoke(IPC.projectCreatePersonal, title),
   updateProject: (
     id: string,
-    patch: { title?: string; draft?: string; step?: number; done?: number[] }
+    patch: { title?: string; draft?: string; step?: number; done?: number[]; stepData?: Project['stepData'] }
   ): Promise<Project | null> => ipcRenderer.invoke(IPC.projectUpdate, { id, patch }),
+  projectChat: (id: string, step: number, message?: string): Promise<Project | null> =>
+    ipcRenderer.invoke(IPC.projectChat, { id, step, message }),
+  projectSaveVersion: (id: string, title?: string, final?: boolean): Promise<Project | null> =>
+    ipcRenderer.invoke(IPC.projectSaveVersion, { id, title, final }),
+  projectSetFinal: (id: string, draftId: string): Promise<Project | null> =>
+    ipcRenderer.invoke(IPC.projectSetFinal, { id, draftId }),
   addProjectEvidence: (
     id: string,
     evidence: { title: string; note: string; sources: NoteSource[]; pageId: string | null }

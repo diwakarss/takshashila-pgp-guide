@@ -55,6 +55,11 @@ export const IPC = {
   projectRemoveEvidence: 'projects:evidence:remove',
   projectDelete: 'projects:delete',
   projectCoach: 'projects:coach',
+  /** Per-step guided chat with the coach (kickoff when no message given). */
+  projectChat: 'projects:chat',
+  /** Snapshot the working draft as a stored version (optionally the final). */
+  projectSaveVersion: 'projects:draft:save',
+  projectSetFinal: 'projects:draft:final',
   /** Persisted app settings (onboarding flag, engine choice, metrics opt-in). */
   settingsGet: 'settings:get',
   settingsSet: 'settings:set',
@@ -377,6 +382,14 @@ export const BARDACH_STEPS = [
 
 export type ProjectEvidence = { id: string; title: string; note: string; sources: NoteSource[]; pageId: string | null }
 
+// The guided flow: each step carries its own coach conversation + the student's
+// takeaway notes (which feed forward as context into later steps).
+export type ProjectMsg = { role: 'user' | 'coach'; text: string }
+export type ProjectStepState = { messages: ProjectMsg[]; notes: string }
+
+/** A stored draft version (final step); one may be marked as the final. */
+export type ProjectDraftVersion = { id: string; title: string; text: string; final: boolean; createdAt: string }
+
 export type Project = {
   id: string
   kind: ProjectKind
@@ -386,10 +399,12 @@ export type Project = {
   dueAt: string | null
   brief: string // the assignment prompt / description
   deliverable: string // e.g. "2-minute video explainer"
-  draft: string // the student's own script/notes (never AI-written)
+  draft: string // the student's own working draft (never AI-written)
   step: number // active Bardach step index
   done: number[] // completed step indices
   evidence: ProjectEvidence[]
+  stepData: Record<string, ProjectStepState> // keyed by step index
+  drafts: ProjectDraftVersion[]
   createdAt: string
   updatedAt: string
 }

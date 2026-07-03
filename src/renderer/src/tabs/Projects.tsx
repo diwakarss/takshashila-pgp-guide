@@ -3,22 +3,20 @@ import {
   FileText,
   Check,
   Sparkles,
-  Search,
-  Users,
-  ClipboardCheck,
-  Repeat,
   Trash2,
   BookMarked,
   Copy,
   ChevronRight,
   X,
-  Lightbulb
+  Lightbulb,
+  Send,
+  Globe,
+  Star,
+  Save
 } from 'lucide-react'
 import { Md } from '../components/Markdown'
 import { BARDACH_STEPS } from '../../../shared/ipc'
 import type {
-  CoachAction,
-  CoachResult,
   EngineStatus,
   NotebookPageSummary,
   NoteSource,
@@ -34,13 +32,29 @@ const AI_DISCLAIMERS = [
   'The analysis in this assignment was done with the support of AI tools for research leads and copy-editing; the final work is my own.'
 ]
 
-const COACH_BAR: { action: CoachAction; label: string; hint: string; icon: typeof Sparkles }[] = [
-  { action: 'brainstorm', label: 'Brainstorm', hint: 'Socratic questions to get you thinking — it won’t answer for you', icon: Sparkles },
-  { action: 'evidence', label: 'Find evidence', hint: 'Real sources and datasets to go gather', icon: Search },
-  { action: 'stakeholders', label: 'Stakeholder map', hint: 'Who’s involved: Actor · Position · Interest · Influence', icon: Users },
-  { action: 'proofread', label: 'Proofread', hint: 'Suggestions on YOUR draft — never a rewrite', icon: ClipboardCheck },
-  { action: 'review', label: 'Review draft', hint: 'A critical read: argument, values, causal logic', icon: Repeat }
-]
+// Quick asks per step — each just sends the text into the step's chat.
+const STEP_CHIPS: Record<string, string[]> = {
+  define: ['Help me narrow it down', 'Is my definition sharp enough?'],
+  evidence: ['Suggest more sources', 'What data would prove the shifts?'],
+  alternatives: ['Give me another angle', 'Which option is strongest?'],
+  criteria: ['Which criteria fit this assignment?'],
+  outcomes: ['Check my reasoning so far'],
+  tradeoffs: ['What am I missing?'],
+  decide: ['Stress-test my decision'],
+  story: ['Structure my 2-minute script', 'Proofread my draft', 'Review my argument']
+}
+
+// What the kickoff will do, per step (sets expectations on the button).
+const KICKOFF_LABEL: Record<string, string> = {
+  define: 'Start — the coach researches the topic and opens the discussion',
+  evidence: 'Start — the coach suggests sources worth gathering',
+  alternatives: 'Start — the coach proposes candidate angles to weigh',
+  criteria: 'Start — the coach proposes judgment criteria to pick from',
+  outcomes: 'Start — the coach maps how to project the outcomes',
+  tradeoffs: 'Start — the coach sets up the trade-offs to confront',
+  decide: 'Start — the coach stress-tests your leaning decision',
+  story: 'Start — the coach structures your deliverable with you'
+}
 
 function dueLabel(dueAt: string | null): { text: string; tone: 'soon' | 'overdue' | 'ok' } | null {
   if (!dueAt) return null
@@ -52,9 +66,11 @@ function dueLabel(dueAt: string | null): { text: string; tone: 'soon' | 'overdue
   return { text: `Due ${date} · ${days} day${days === 1 ? '' : 's'}`, tone: days <= 3 ? 'soon' : 'ok' }
 }
 
-// Projects — assignment-driven, no-write scaffold (PRD §8.5). The project list
-// lives in the sidebar (uniform with other tabs); this pane shows either a
-// how-it-works welcome or the open project's guided workspace.
+// Projects — a guided, step-by-step workspace (PRD §8.5). Each Bardach step is
+// a live discussion with the coach (kickoff does the step's legwork), plus the
+// step's own process: evidence collection on step 2, draft versions on step 8.
+// The student's takeaways carry forward as context. The AI never writes the
+// deliverable.
 export function Projects(props: {
   engine: EngineStatus | null
   openId: string | null
@@ -81,7 +97,7 @@ function Welcome({ onOpen, onChanged }: { onOpen: (id: string) => void; onChange
     }
   }
 
-  const upNext = overview ? [...overview.assignments].sort((a, b) => (a.dueAt ?? '9') < (b.dueAt ?? '9') ? -1 : 1) : []
+  const upNext = overview ? [...overview.assignments].sort((a, b) => ((a.dueAt ?? '9') < (b.dueAt ?? '9') ? -1 : 1)) : []
 
   return (
     <div className="surface proj-welcome">
@@ -97,16 +113,15 @@ function Welcome({ onOpen, onChanged }: { onOpen: (id: string) => void; onChange
             <strong>Pick a project</strong> from the left — an assignment, your capstone, or a personal piece.
           </li>
           <li>
-            <strong>Read the brief</strong>, then work through the 8 steps of a policy analysis. Each step tells
-            you exactly what to do; tick it off and move to the next.
+            <strong>Work step by step.</strong> Each of the 8 steps opens a discussion: the coach does the legwork
+            (researching the brief, suggesting sources, proposing criteria) and you think it through together.
           </li>
           <li>
-            <strong>Write in your own words</strong> in the draft pane. The coach buttons help you think, find
-            evidence, and proofread — they will never write your submission for you (Takshashila’s AI policy).
+            <strong>Mark a step complete</strong> to move on — your takeaways carry forward into the next step.
           </li>
           <li>
-            <strong>Pull in evidence</strong> from your Notebook, and when you’re done, copy the export — draft,
-            bibliography, and the required disclaimers, ready to submit.
+            <strong>Finish with your draft.</strong> On the last step you write in your own words, save versions,
+            and mark one final — then copy the export with the required disclaimers.
           </li>
         </ol>
       </section>
@@ -147,35 +162,106 @@ function Welcome({ onOpen, onChanged }: { onOpen: (id: string) => void; onChange
 // ── the guided workspace ───────────────────────────────────────────────────
 function Editor({ id, engine, onChanged }: { id: string; engine: EngineStatus | null; onChanged: () => void }): JSX.Element {
   const [project, setProject] = useState<Project | null>(null)
+  const [chatBusy, setChatBusy] = useState(false)
+  const [chatInput, setChatInput] = useState('')
+  const [notes, setNotes] = useState('')
   const [draft, setDraft] = useState('')
   const [saveState, setSaveState] = useState<'idle' | 'saving' | 'saved'>('idle')
-  const [coach, setCoach] = useState<CoachResult | null>(null)
-  const [coaching, setCoaching] = useState<CoachAction | null>(null)
+  const [versionName, setVersionName] = useState('')
   const [showEvidence, setShowEvidence] = useState(false)
+  const [webTitle, setWebTitle] = useState('')
+  const [webUrl, setWebUrl] = useState('')
   const [pages, setPages] = useState<NotebookPageSummary[]>([])
   const [toast, setToast] = useState<string | null>(null)
   const [showIntro, setShowIntro] = useState(() => localStorage.getItem('pgp.projIntroSeen') !== '1')
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const notesTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const chatEndRef = useRef<HTMLDivElement>(null)
   const engineReady = engine?.available ?? false
 
   useEffect(() => {
-    setCoach(null)
     void window.pgp.openProject(id).then((p) => {
       setProject(p)
       setDraft(p?.draft ?? '')
+      setNotes(p ? (p.stepData[String(p.step)]?.notes ?? '') : '')
       setSaveState('idle')
     })
   }, [id])
+
+  const step = project?.step ?? 0
+  const stepKey = project ? BARDACH_STEPS[step].key : 'define'
+  const stepState = project?.stepData[String(step)] ?? { messages: [], notes: '' }
+
+  // Keep the notes box in sync when the step changes.
+  useEffect(() => {
+    if (project) setNotes(project.stepData[String(project.step)]?.notes ?? '')
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [project?.step])
+
+  useEffect(() => {
+    chatEndRef.current?.scrollIntoView({ block: 'nearest' })
+  }, [stepState.messages.length, chatBusy])
+
+  const flash = (msg: string): void => {
+    setToast(msg)
+    setTimeout(() => setToast(null), 2400)
+  }
 
   const dismissIntro = (): void => {
     localStorage.setItem('pgp.projIntroSeen', '1')
     setShowIntro(false)
   }
 
-  const patch = async (p: { title?: string; draft?: string; step?: number; done?: number[] }): Promise<void> => {
+  const patch = async (p: Parameters<typeof window.pgp.updateProject>[1]): Promise<void> => {
     const updated = await window.pgp.updateProject(id, p)
     if (updated) setProject(updated)
     onChanged()
+  }
+
+  const goToStep = (i: number): void => {
+    if (chatBusy) return
+    void patch({ step: i })
+  }
+
+  const completeStep = (): void => {
+    if (!project) return
+    const done = project.done.includes(step) ? project.done : [...project.done, step]
+    const next = Math.min(step + 1, BARDACH_STEPS.length - 1)
+    void patch({ done, step: next })
+  }
+
+  const chat = async (message?: string): Promise<void> => {
+    if (!engineReady || chatBusy || !project) return
+    setChatBusy(true)
+    setChatInput('')
+    // Show the user's message immediately while the coach works.
+    if (message?.trim()) {
+      const key = String(step)
+      const cur = project.stepData[key] ?? { messages: [], notes: '' }
+      setProject({
+        ...project,
+        stepData: { ...project.stepData, [key]: { ...cur, messages: [...cur.messages, { role: 'user', text: message.trim() }] } }
+      })
+    }
+    try {
+      const updated = await window.pgp.projectChat(id, step, message)
+      if (updated) setProject(updated)
+    } catch (e) {
+      flash(`Coach unavailable: ${e instanceof Error ? e.message : String(e)}`)
+    } finally {
+      setChatBusy(false)
+    }
+  }
+
+  const saveNotes = (next: string): void => {
+    setNotes(next)
+    if (!project) return
+    if (notesTimer.current) clearTimeout(notesTimer.current)
+    notesTimer.current = setTimeout(() => {
+      const key = String(project.step)
+      const cur = project.stepData[key] ?? { messages: [], notes: '' }
+      void patch({ stepData: { ...project.stepData, [key]: { ...cur, notes: next } } })
+    }, 800)
   }
 
   const saveDraft = (next: string): void => {
@@ -190,49 +276,50 @@ function Editor({ id, engine, onChanged }: { id: string; engine: EngineStatus | 
     }, 700)
   }
 
-  const toggleDone = (i: number): void => {
-    if (!project) return
-    const done = project.done.includes(i) ? project.done.filter((x) => x !== i) : [...project.done, i]
-    void patch({ done })
+  const saveVersion = async (final: boolean): Promise<void> => {
+    const p = await window.pgp.projectSaveVersion(id, versionName, final)
+    if (p) setProject(p)
+    setVersionName('')
+    flash(final ? 'Saved as your final version' : 'Version saved')
   }
 
-  // The friendly path: mark the current step done and advance to the next.
-  const completeStep = (): void => {
-    if (!project) return
-    const done = project.done.includes(project.step) ? project.done : [...project.done, project.step]
-    const step = Math.min(project.step + 1, BARDACH_STEPS.length - 1)
-    void patch({ done, step })
+  const markFinal = async (draftId: string): Promise<void> => {
+    const p = await window.pgp.projectSetFinal(id, draftId)
+    if (p) setProject(p)
+    flash('Marked as final')
   }
 
-  const runCoach = async (action: CoachAction): Promise<void> => {
-    if (!engineReady || coaching) return
-    setCoaching(action)
-    setCoach(null)
-    try {
-      const res = await window.pgp.projectCoach(id, action)
-      setCoach(res)
-    } finally {
-      setCoaching(null)
-    }
-  }
-
-  const openEvidence = (): void => {
+  const openEvidencePicker = (): void => {
     setShowEvidence(true)
     void window.pgp.notebookList().then(setPages)
   }
 
-  const addEvidence = async (pageId: string): Promise<void> => {
+  const addNotebookEvidence = async (pageId: string): Promise<void> => {
     const page = await window.pgp.notebookGet(pageId)
     if (!page) return
     const sources = dedupe(page.snippets.flatMap((x) => x.sources))
     const updated = await window.pgp.addProjectEvidence(id, {
       title: page.title,
-      note: `${page.snippets.length} note${page.snippets.length === 1 ? '' : 's'}`,
+      note: `${page.snippets.length} note${page.snippets.length === 1 ? '' : 's'} from your Notebook`,
       sources,
       pageId
     })
     if (updated) setProject(updated)
     setShowEvidence(false)
+  }
+
+  const addWebEvidence = async (): Promise<void> => {
+    if (!webUrl.trim()) return
+    const title = webTitle.trim() || webUrl.trim()
+    const updated = await window.pgp.addProjectEvidence(id, {
+      title,
+      note: 'web source',
+      sources: [{ title, url: webUrl.trim(), kind: 'other' }],
+      pageId: null
+    })
+    if (updated) setProject(updated)
+    setWebTitle('')
+    setWebUrl('')
   }
 
   const removeEvidence = async (evidenceId: string): Promise<void> => {
@@ -242,12 +329,14 @@ function Editor({ id, engine, onChanged }: { id: string; engine: EngineStatus | 
 
   const copyExport = async (): Promise<void> => {
     if (!project) return
+    const finalDraft = project.drafts.find((d) => d.final)
+    const text = finalDraft?.text ?? project.draft
     const biblio = dedupe(project.evidence.flatMap((e) => e.sources))
     const lines = [
       `# ${project.title}`,
       project.deliverable ? `_${project.deliverable}_` : '',
       '',
-      project.draft.trim() || '_(your draft goes here)_',
+      text.trim() || '_(your draft goes here)_',
       '',
       biblio.length ? '## Sources' : '',
       ...biblio.map((s, i) => `${i + 1}. ${s.title}${s.url ? ` — ${s.url}` : ''}`),
@@ -257,22 +346,16 @@ function Editor({ id, engine, onChanged }: { id: string; engine: EngineStatus | 
       `Generative AI: ${AI_DISCLAIMERS[1]}`
     ]
     await navigator.clipboard.writeText(lines.filter((l) => l !== undefined).join('\n'))
-    setToast('Export (draft + sources + disclaimers) copied to clipboard')
-    setTimeout(() => setToast(null), 2600)
-  }
-
-  const copyText = async (text: string, label: string): Promise<void> => {
-    await navigator.clipboard.writeText(text)
-    setToast(`${label} copied`)
-    setTimeout(() => setToast(null), 2000)
+    flash(`Export copied${finalDraft ? ` (final: ${finalDraft.title})` : ''}`)
   }
 
   if (!project) return <p className="muted" style={{ padding: 24 }}>Loading…</p>
 
-  const step = BARDACH_STEPS[project.step]
+  const stepDef = BARDACH_STEPS[step]
   const due = dueLabel(project.dueAt)
-  const isLastStep = project.step >= BARDACH_STEPS.length - 1
-  const stepDone = project.done.includes(project.step)
+  const isLastStep = step >= BARDACH_STEPS.length - 1
+  const isEvidenceStep = stepKey === 'evidence'
+  const isStoryStep = stepKey === 'story'
 
   return (
     <div className="proj-editor">
@@ -301,9 +384,10 @@ function Editor({ id, engine, onChanged }: { id: string; engine: EngineStatus | 
         <div className="proj-intro">
           <Lightbulb size={16} className="proj-intro-icon" />
           <div>
-            <strong>First time here?</strong> Read the brief below, then follow the steps on the left — the “What
-            to do” card walks you through each one. Draft in your own words; the coach buttons help you think but
-            never write for you. When done, copy the export with your disclaimers.
+            <strong>How this works:</strong> each step is a discussion — press <em>Start</em> and the coach does
+            the legwork, then you think it through together. Jot your takeaway, mark the step complete, and move
+            on. On the last step you write your draft (your words, always), save versions, and export with the
+            disclaimers.
           </div>
           <button className="icon-btn" title="Got it" onClick={dismissIntro}>
             <X size={15} />
@@ -312,12 +396,12 @@ function Editor({ id, engine, onChanged }: { id: string; engine: EngineStatus | 
       )}
 
       {project.brief && (
-        <section className="proj-brief-card">
-          <div className="proj-brief-head">
+        <details className="proj-brief-card" open={stepState.messages.length === 0}>
+          <summary className="proj-brief-head">
             <FileText size={15} /> The brief
-          </div>
+          </summary>
           <p>{project.brief}</p>
-        </section>
+        </details>
       )}
 
       <div className="proj-body">
@@ -326,113 +410,49 @@ function Editor({ id, engine, onChanged }: { id: string; engine: EngineStatus | 
           <ul>
             {BARDACH_STEPS.map((s, i) => {
               const done = project.done.includes(i)
-              const active = project.step === i
+              const active = step === i
+              const talked = (project.stepData[String(i)]?.messages.length ?? 0) > 0
               return (
                 <li key={s.key}>
                   <button
                     className={`proj-step${active ? ' active' : ''}${done ? ' done' : ''}`}
                     title={s.guide}
-                    onClick={() => void patch({ step: i })}
+                    onClick={() => goToStep(i)}
                   >
-                    <span
-                      className={`proj-step-box${done ? ' on' : ''}`}
-                      title={done ? 'Mark not done' : 'Mark done'}
-                      onClick={(e) => {
-                        e.stopPropagation()
-                        toggleDone(i)
-                      }}
-                    >
-                      {done && <Check size={12} />}
-                    </span>
+                    <span className={`proj-step-box${done ? ' on' : ''}`}>{done && <Check size={12} />}</span>
                     <span className="proj-step-title">
                       {i + 1}. {s.title}
                     </span>
+                    {talked && !done && <span className="proj-step-dot" title="Discussion in progress" />}
                   </button>
                 </li>
               )
             })}
           </ul>
-          <p className="proj-steps-hint muted small">
-            The classic 8 steps of a policy analysis (Bardach). Click a step to focus it.
-          </p>
         </aside>
 
         <div className="proj-main">
-          {step && (
-            <section className="proj-stepguide">
-              <div className="proj-stepguide-head">
-                <span className="proj-stepguide-label">
-                  Step {project.step + 1} of {BARDACH_STEPS.length} · What to do
-                </span>
-                <span className="proj-lens-chip">India lens · {step.lens}</span>
-              </div>
-              <p className="proj-stepguide-text">{step.guide}</p>
-              <button className="btn primary proj-step-next" onClick={completeStep} disabled={stepDone && isLastStep}>
-                {isLastStep ? (stepDone ? 'All steps done ✓' : 'Mark final step done') : (
-                  <>
-                    Done — next step <ChevronRight size={15} />
-                  </>
-                )}
-              </button>
-            </section>
-          )}
-
-          <div className="proj-toolbar">
-            {COACH_BAR.map(({ action, label, hint, icon: Icon }) => (
-              <button
-                key={action}
-                className="lens-btn"
-                title={hint}
-                disabled={!engineReady || !!coaching}
-                onClick={() => void runCoach(action)}
-              >
-                <Icon size={14} /> {coaching === action ? 'Coaching…' : label}
-              </button>
-            ))}
-            <button className="lens-btn" title="Pull a Notebook page (notes + sources) into this project" onClick={openEvidence}>
-              <BookMarked size={14} /> Add evidence
-            </button>
-          </div>
-
-          <textarea
-            className="proj-draft"
-            placeholder={`Your ${project.deliverable.toLowerCase().includes('video') ? 'video script' : 'draft'} — in your own words. Start rough; the coach can proofread once something’s here.`}
-            value={draft}
-            onChange={(e) => saveDraft(e.target.value)}
-          />
-          <div className="proj-draft-foot muted small">
-            {saveState === 'saving' ? 'Saving…' : saveState === 'saved' ? 'Saved ✓' : ''}
-            <button className="nb-showall" onClick={() => void copyExport()}>
-              <Copy size={12} /> Copy export (draft + sources + disclaimers)
-            </button>
-          </div>
-
-          {coaching && !coach && <div className="proj-coach loading muted">Your coach is thinking…</div>}
-          {coach && (
-            <div className={`proj-coach${coach.blocked ? ' blocked' : ''}`}>
-              <div className="proj-coach-head">
-                {coach.title}
-                <button className="icon-btn" title="Dismiss" onClick={() => setCoach(null)}>
-                  <X size={14} />
-                </button>
-              </div>
-              <div className="answer-md">
-                <Md>{coach.markdown}</Md>
-              </div>
+          <section className="proj-stepguide">
+            <div className="proj-stepguide-head">
+              <span className="proj-stepguide-label">
+                Step {step + 1} of {BARDACH_STEPS.length} · {stepDef.title}
+              </span>
+              <span className="proj-lens-chip">India lens · {stepDef.lens}</span>
             </div>
-          )}
+            <p className="proj-stepguide-text">{stepDef.guide}</p>
+          </section>
 
-          {project.evidence.length > 0 && (
-            <div className="proj-evidence">
-              <div className="recents-label">Evidence</div>
+          {isEvidenceStep && (
+            <section className="proj-collect">
+              <div className="recents-label">Your evidence ({project.evidence.length})</div>
               {project.evidence.map((e) => (
                 <div key={e.id} className="proj-ev-item">
                   <div className="proj-ev-main">
-                    <BookMarked size={14} />
+                    {e.pageId ? <BookMarked size={14} /> : <Globe size={14} />}
                     <span className="proj-ev-title">{e.title}</span>
                     <span className="muted small">
                       {e.note}
-                      {e.sources.length > 0 && ` · ${e.sources.length} source${e.sources.length === 1 ? '' : 's'}`}
+                      {e.sources.length > 1 && ` · ${e.sources.length} sources`}
                     </span>
                   </div>
                   <button className="icon-btn" title="Remove" onClick={() => void removeEvidence(e.id)}>
@@ -440,8 +460,170 @@ function Editor({ id, engine, onChanged }: { id: string; engine: EngineStatus | 
                   </button>
                 </div>
               ))}
-            </div>
+              <div className="proj-collect-add">
+                <button className="lens-btn" onClick={openEvidencePicker}>
+                  <BookMarked size={14} /> From my Notebook
+                </button>
+                <input
+                  className="input proj-web-url"
+                  placeholder="Paste a web link (https://…)"
+                  value={webUrl}
+                  onChange={(e) => setWebUrl(e.target.value)}
+                />
+                <input
+                  className="input proj-web-title"
+                  placeholder="Title (optional)"
+                  value={webTitle}
+                  onChange={(e) => setWebTitle(e.target.value)}
+                />
+                <button className="btn" disabled={!webUrl.trim()} onClick={() => void addWebEvidence()}>
+                  Add
+                </button>
+              </div>
+            </section>
           )}
+
+          {isStoryStep && (
+            <section className="proj-collect">
+              <div className="recents-label">Your draft — in your own words</div>
+              <textarea
+                className="proj-draft"
+                placeholder={`Your ${project.deliverable.toLowerCase().includes('video') ? 'video script' : 'draft'}. Start rough — save versions as you refine, then mark one final.`}
+                value={draft}
+                onChange={(e) => saveDraft(e.target.value)}
+              />
+              <div className="proj-draft-foot muted small">
+                <span>{saveState === 'saving' ? 'Saving…' : saveState === 'saved' ? 'Saved ✓' : ''}</span>
+                <span className="proj-version-row">
+                  <input
+                    className="input proj-version-name"
+                    placeholder="Version name (optional)"
+                    value={versionName}
+                    onChange={(e) => setVersionName(e.target.value)}
+                  />
+                  <button className="btn" disabled={!draft.trim()} onClick={() => void saveVersion(false)}>
+                    <Save size={13} /> Save version
+                  </button>
+                  <button className="btn primary" disabled={!draft.trim()} onClick={() => void saveVersion(true)}>
+                    <Star size={13} /> Save as final
+                  </button>
+                </span>
+              </div>
+
+              {project.drafts.length > 0 && (
+                <ul className="proj-versions">
+                  {project.drafts.map((d) => (
+                    <li key={d.id} className={`proj-version${d.final ? ' final' : ''}`}>
+                      <button
+                        className="proj-version-load"
+                        title="Load into the editor"
+                        onClick={() => saveDraft(d.text)}
+                      >
+                        {d.title}
+                      </button>
+                      <span className="muted small">
+                        {new Date(d.createdAt).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' })}
+                      </span>
+                      {d.final ? (
+                        <span className="proj-final-badge">
+                          <Star size={11} /> Final
+                        </span>
+                      ) : (
+                        <button className="nb-showall" onClick={() => void markFinal(d.id)}>
+                          Mark final
+                        </button>
+                      )}
+                    </li>
+                  ))}
+                </ul>
+              )}
+
+              <button className="nb-showall proj-export" onClick={() => void copyExport()}>
+                <Copy size={12} /> Copy export (final draft + sources + disclaimers)
+              </button>
+            </section>
+          )}
+
+          <section className="pc-chat">
+            {stepState.messages.length === 0 && !chatBusy ? (
+              <div className="pc-kickoff">
+                <p className="muted small">This step starts as a discussion with your coach.</p>
+                <button className="btn primary proj-step-next" disabled={!engineReady} onClick={() => void chat()}>
+                  <Sparkles size={15} /> {KICKOFF_LABEL[stepKey]}
+                </button>
+                {!engineReady && <p className="muted small">Your AI isn’t reachable right now.</p>}
+              </div>
+            ) : (
+              <div className="pc-messages">
+                {stepState.messages.map((m, i) => (
+                  <div key={i} className={`pc-msg ${m.role}`}>
+                    {m.role === 'coach' ? (
+                      <div className="answer-md">
+                        <Md>{m.text}</Md>
+                      </div>
+                    ) : (
+                      m.text
+                    )}
+                  </div>
+                ))}
+                {chatBusy && <div className="pc-msg coach muted thinking">Your coach is working…</div>}
+                <div ref={chatEndRef} />
+              </div>
+            )}
+
+            {stepState.messages.length > 0 && !chatBusy && (
+              <div className="pc-chips">
+                {(STEP_CHIPS[stepKey] ?? []).map((c) => (
+                  <button key={c} className="chip" disabled={!engineReady} onClick={() => void chat(c)}>
+                    {c}
+                  </button>
+                ))}
+              </div>
+            )}
+
+            <div className="ask-row">
+              <input
+                className="input"
+                placeholder="Discuss this step with your coach…"
+                value={chatInput}
+                disabled={!engineReady || chatBusy}
+                onChange={(e) => setChatInput(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && chatInput.trim() && void chat(chatInput)}
+              />
+              <button
+                className="btn primary"
+                disabled={!engineReady || chatBusy || !chatInput.trim()}
+                onClick={() => void chat(chatInput)}
+              >
+                <Send size={15} />
+              </button>
+            </div>
+          </section>
+
+          <section className="proj-notes">
+            <div className="recents-label">Your takeaway from this step (carried into the next)</div>
+            <textarea
+              className="proj-notes-box"
+              placeholder="One or two sentences: what did you conclude here?"
+              value={notes}
+              onChange={(e) => saveNotes(e.target.value)}
+            />
+          </section>
+
+          <div className="proj-stepfoot">
+            <button className="btn primary proj-step-next" onClick={completeStep} disabled={chatBusy}>
+              {isLastStep ? 'Mark final step done ✓' : (
+                <>
+                  Mark step complete — next <ChevronRight size={15} />
+                </>
+              )}
+            </button>
+            {!isStoryStep && (
+              <button className="nb-showall" onClick={() => void copyExport()}>
+                <Copy size={12} /> Copy export
+              </button>
+            )}
+          </div>
 
           <details className="proj-disclaimers">
             <summary>Submission disclaimers (Takshashila policy)</summary>
@@ -449,18 +631,12 @@ function Editor({ id, engine, onChanged }: { id: string; engine: EngineStatus | 
               <p>
                 <strong>Anti-plagiarism:</strong> {ANTI_PLAGIARISM}
               </p>
-              <button className="nb-showall" onClick={() => void copyText(ANTI_PLAGIARISM, 'Anti-plagiarism disclaimer')}>
-                Copy
-              </button>
             </div>
             {AI_DISCLAIMERS.map((d, i) => (
               <div key={i} className="proj-disc-item">
                 <p>
                   <strong>AI-use option {i + 1}:</strong> {d}
                 </p>
-                <button className="nb-showall" onClick={() => void copyText(d, 'AI-use disclaimer')}>
-                  Copy
-                </button>
               </div>
             ))}
           </details>
@@ -477,7 +653,7 @@ function Editor({ id, engine, onChanged }: { id: string; engine: EngineStatus | 
               <ul className="proj-ev-picker">
                 {pages.map((p) => (
                   <li key={p.id}>
-                    <button className="recent-item" onClick={() => void addEvidence(p.id)}>
+                    <button className="recent-item" onClick={() => void addNotebookEvidence(p.id)}>
                       {p.title} <span className="muted small">· {p.snippets} note{p.snippets === 1 ? '' : 's'}</span>
                     </button>
                   </li>
