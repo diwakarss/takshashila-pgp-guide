@@ -448,7 +448,8 @@ h2 {
   display: flex;
   flex-direction: column;
   height: 100%;
-  max-width: 780px;
+  /* Responsive: fills the pane on smaller windows, caps for readability on large. */
+  width: min(96%, 1120px);
   margin: 0 auto;
 }
 .tutor-bar {
