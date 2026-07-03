@@ -248,6 +248,21 @@ function registerIpc(): void {
 process.on('uncaughtException', (e) => console.error('[pgp] uncaughtException:', e))
 process.on('unhandledRejection', (e) => console.error('[pgp] unhandledRejection:', e))
 
+// ONE instance only. The brain (PGLite) is a single-process database — two
+// instances writing the same data dir corrupt it (learned the hard way: a dev
+// harness run alongside `npm run dev` destroyed a brain). A second launch
+// exits immediately and focuses the existing window instead.
+if (!app.requestSingleInstanceLock()) {
+  console.error('[pgp] another instance already holds the brain — exiting')
+  app.exit(0)
+}
+app.on('second-instance', () => {
+  if (devWindow) {
+    if (devWindow.isMinimized()) devWindow.restore()
+    devWindow.focus()
+  }
+})
+
 app.whenReady().then(() => {
   registerIpc()
   createWindow()
