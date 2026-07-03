@@ -73,6 +73,7 @@ export function App(): JSX.Element {
               openThreadId={openThreadId}
               onOpenThread={setOpenThreadId}
               onThreadsChanged={threadsChanged}
+              onCaptured={() => setNotebookVersion((v) => v + 1)}
               onGoToSettings={() => setTab('settings')}
             />
           )}

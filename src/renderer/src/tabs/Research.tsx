@@ -1,20 +1,8 @@
-import { useEffect, useRef, useState, type MouseEvent as ReactMouseEvent } from 'react'
-import { Search, ExternalLink, Users, Scale, Table2, Clock, BookmarkPlus } from 'lucide-react'
+import { useEffect, useRef, useState } from 'react'
+import { Search, ExternalLink, Users, Scale, Table2, Clock } from 'lucide-react'
 import { Md, toSuperscriptCitations } from '../components/Markdown'
-import { selectionToMarkdown } from '../lib/selection'
-import type {
-  EngineStatus,
-  LensKind,
-  LensReply,
-  NotebookPageSummary,
-  NoteSource,
-  ResearchSource,
-  SourceType,
-  ThreadDetail,
-  Turn
-} from '../../../shared/ipc'
-
-type Capture = { text: string; sources: NoteSource[]; from: string }
+import { useNotebookCapture, selectionCapture, type CaptureFn } from '../lib/capture'
+import type { EngineStatus, LensKind, LensReply, NoteSource, ResearchSource, SourceType, ThreadDetail, Turn } from '../../../shared/ipc'
 
 const toNoteSources = (sources: ResearchSource[]): NoteSource[] =>
   sources.map((s) => ({ title: s.title, url: s.url, kind: s.type }))
@@ -55,40 +43,8 @@ export function Research(props: {
     openIdRef.current = openThreadId
   }, [openThreadId])
 
-  // Highlight → Notebook capture: a floating pill at the selection, then a page picker.
-  const [pill, setPill] = useState<{ capture: Capture; x: number; y: number } | null>(null)
-  const [picker, setPicker] = useState<Capture | null>(null)
-  const [pages, setPages] = useState<NotebookPageSummary[]>([])
-  const [pickPage, setPickPage] = useState<string>('') // '' = new page
-  const [newTitle, setNewTitle] = useState('')
-  const [toast, setToast] = useState<string | null>(null)
-
-  const onCapture = (capture: Capture, x: number, y: number): void => setPill({ capture, x, y })
-
-  const openPicker = (): void => {
-    if (!pill) return
-    setPicker(pill.capture)
-    setPill(null)
-    setPickPage('')
-    setNewTitle('')
-    void window.pgp.notebookList().then(setPages)
-    window.getSelection()?.removeAllRanges()
-  }
-
-  const saveSnippet = async (): Promise<void> => {
-    if (!picker) return
-    const page = await window.pgp.addSnippet({
-      pageId: pickPage || undefined,
-      newTitle: pickPage ? undefined : newTitle,
-      text: picker.text,
-      sources: picker.sources,
-      from: picker.from
-    })
-    setPicker(null)
-    onCaptured()
-    setToast(`Saved to “${page?.title ?? 'page'}”`)
-    setTimeout(() => setToast(null), 2600)
-  }
+  // Highlight → Notebook capture (shared with Tutor).
+  const { onCapture, clearPill, ui: captureUI } = useNotebookCapture(onCaptured)
 
   useEffect(() => {
     if (openThreadId == null) {
@@ -179,7 +135,7 @@ export function Research(props: {
 
   return (
     <div className="tutor research">
-      <div className="thread-scroll" ref={scrollRef} onMouseDown={() => setPill(null)}>
+      <div className="thread-scroll" ref={scrollRef} onMouseDown={clearPill}>
         {turns.length === 0 && !busy && (
           <div className="thread-welcome">
             <h2>Research any topic</h2>
@@ -247,71 +203,10 @@ export function Research(props: {
         </button>
       </div>
 
-      {pill && (
-        <button
-          className="capture-pill"
-          style={{ left: pill.x, top: pill.y }}
-          onMouseDown={(e) => e.stopPropagation()}
-          onClick={openPicker}
-        >
-          <BookmarkPlus size={14} /> Add to Notebook
-        </button>
-      )}
-
-      {picker && (
-        <div className="capture-overlay" onMouseDown={() => setPicker(null)}>
-          <div className="capture-panel" onMouseDown={(e) => e.stopPropagation()}>
-            <div className="capture-head">Add to Notebook</div>
-            <blockquote className="capture-quote answer-md">
-              <Md>{picker.text}</Md>
-            </blockquote>
-            <label className="capture-field">
-              <span className="course-select-label">Page</span>
-              <select value={pickPage} onChange={(e) => setPickPage(e.target.value)}>
-                <option value="">➕ New page…</option>
-                {pages.map((p) => (
-                  <option key={p.id} value={p.id}>
-                    {p.title}
-                  </option>
-                ))}
-              </select>
-            </label>
-            {!pickPage && (
-              <input
-                className="input capture-title"
-                placeholder="New page title (optional)"
-                value={newTitle}
-                onChange={(e) => setNewTitle(e.target.value)}
-              />
-            )}
-            <div className="capture-actions">
-              <button className="btn" onClick={() => setPicker(null)}>
-                Cancel
-              </button>
-              <button className="btn primary" onClick={saveSnippet}>
-                Save
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {toast && <div className="toast">{toast}</div>}
+      {captureUI}
     </div>
   )
 }
-
-// Turn a text selection inside an answer into a capture, keyed to that answer's sources.
-function selectionCapture(sources: NoteSource[], from: string, onCapture: CaptureFn): (e: ReactMouseEvent) => void {
-  return (e) => {
-    // Capture as Markdown so lists/tables/emphasis survive into the Notebook.
-    const text = selectionToMarkdown()
-    if (text.length < 3) return
-    onCapture({ text, sources, from }, e.clientX, e.clientY)
-  }
-}
-
-type CaptureFn = (capture: Capture, x: number, y: number) => void
 
 function ResearchTurnView(props: {
   turn: Turn

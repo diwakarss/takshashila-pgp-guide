@@ -1,17 +1,24 @@
 import { useEffect, useRef, useState } from 'react'
 import { BookOpen, Pencil, ChevronLeft, ChevronRight } from 'lucide-react'
 import { Md, toSuperscriptCitations } from '../components/Markdown'
+import { useNotebookCapture, selectionCapture, type CaptureFn } from '../lib/capture'
 import type {
   CourseSummary,
   EngineStatus,
   IllustrationImage,
   IllustrationSpec,
+  NoteSource,
+  SearchHit,
   ThreadDetail,
   Turn,
   TutorReply
 } from '../../../shared/ipc'
 
 type IllusEntry = { status: 'drawing' | 'done' | 'error'; dataUrl?: string; error?: string; quota?: boolean }
+
+// Tutor sources are course lessons (no web url) — carry them as corpus citations.
+const corpusSources = (hits: SearchHit[]): NoteSource[] =>
+  hits.map((h) => ({ title: h.title ?? h.slug, kind: 'corpus' }))
 
 // Tutor — a threaded conversation. The whole thread scrolls as one (turns +
 // follow-ups). A concept reply is a paginated slide deck (Back/Next); a simple
@@ -25,10 +32,22 @@ export function Tutor(props: {
   openThreadId: string | null
   onOpenThread: (id: string | null) => void
   onThreadsChanged: () => void
+  onCaptured: () => void
   onGoToSettings: () => void
 }): JSX.Element {
-  const { ready, engine, courses, course, onCourseSynced, openThreadId, onOpenThread, onThreadsChanged, onGoToSettings } =
-    props
+  const {
+    ready,
+    engine,
+    courses,
+    course,
+    onCourseSynced,
+    openThreadId,
+    onOpenThread,
+    onThreadsChanged,
+    onCaptured,
+    onGoToSettings
+  } = props
+  const { onCapture, clearPill, ui: captureUI } = useNotebookCapture(onCaptured)
   const [thread, setThread] = useState<ThreadDetail | null>(null)
   const [q, setQ] = useState('')
   const [busy, setBusy] = useState(false)
@@ -133,7 +152,7 @@ export function Tutor(props: {
 
   return (
     <div className="tutor">
-      <div className="thread-scroll" ref={scrollRef}>
+      <div className="thread-scroll" ref={scrollRef} onMouseDown={clearPill}>
         {turns.length === 0 && !busy && (
           <div className="thread-welcome">
             <h2>Ask about {courseName}</h2>
@@ -149,7 +168,7 @@ export function Tutor(props: {
         )}
 
         {turns.map((turn) => (
-          <TurnView key={turn.id} turn={turn} illus={illus} onNeedIllustration={needIllustration} />
+          <TurnView key={turn.id} turn={turn} illus={illus} onNeedIllustration={needIllustration} onCapture={onCapture} />
         ))}
 
         {pending && pendingThreadId === openThreadId && (
@@ -186,6 +205,8 @@ export function Tutor(props: {
           {busy ? '…' : 'Ask'}
         </button>
       </div>
+
+      {captureUI}
     </div>
   )
 }
@@ -194,8 +215,9 @@ function TurnView(props: {
   turn: Turn
   illus: Record<string, IllusEntry>
   onNeedIllustration: (turnId: string, spec: IllustrationSpec) => void
+  onCapture: CaptureFn
 }): JSX.Element {
-  const { turn, illus, onNeedIllustration } = props
+  const { turn, illus, onNeedIllustration, onCapture } = props
   const a = turn.answer
   const slides = a.kind === 'slides' ? a.slides : []
   const [idx, setIdx] = useState(0)
@@ -213,7 +235,7 @@ function TurnView(props: {
   return (
     <div className="turn">
       <div className="turn-q">{turn.question}</div>
-      <div className="turn-a">
+      <div className="turn-a" onMouseUp={selectionCapture(corpusSources(a.sources), `Tutor: ${turn.question}`, onCapture)}>
         {a.kind === 'slides' && cur ? (
           <div className="slide-card">
             <h3 className="slide-heading">{cur.heading}</h3>

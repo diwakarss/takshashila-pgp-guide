@@ -1271,6 +1271,11 @@ a.source-line-title:hover {
   border-radius: 999px;
   padding: 1px 8px;
   white-space: nowrap;
+  text-transform: capitalize;
+}
+.src-badge.corpus {
+  color: #1b6fb3;
+  background: color-mix(in srgb, #1b6fb3 12%, transparent);
 }
 .src-badge.government {
   color: #1d6a3c;
