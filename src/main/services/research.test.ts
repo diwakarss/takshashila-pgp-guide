@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { classifySource, parseResearch, buildResearchPrompt } from './research'
+import { classifySource, parseResearch, buildResearchPrompt, parseLens, buildLensPrompt } from './research'
 
 describe('classifySource', () => {
   it('classifies by high-signal domains, overriding the model', () => {
@@ -41,6 +41,51 @@ describe('parseResearch', () => {
     const r = parseResearch('sorry, I could not search')
     expect(r.synthesis).toContain('could not search')
     expect(r.sources).toEqual([])
+  })
+})
+
+describe('parseLens', () => {
+  it('parses a table lens (stakeholders) with renumbered sources', () => {
+    const raw = JSON.stringify({
+      intro: 'The main actors in gig-work regulation.',
+      table: {
+        columns: ['Actor', 'Position', 'Interest', 'Influence'],
+        rows: [
+          ['Aggregators (Union)', 'Oppose', 'Low labour cost', 'High [1]'],
+          ['Gig workers', 'Support', 'Security', 'Medium']
+        ]
+      },
+      sources: [{ n: 1, title: 'Code on Social Security', url: 'https://labour.gov.in/x', type: 'news' }]
+    })
+    const r = parseLens(raw, 'stakeholders')
+    expect(r?.title).toBe('Stakeholder map')
+    expect(r?.table?.columns).toHaveLength(4)
+    expect(r?.table?.rows).toHaveLength(2)
+    expect(r?.sources[0].type).toBe('government') // labour.gov.in overrides "news"
+  })
+  it('parses a twosides lens', () => {
+    const raw = JSON.stringify({
+      intro: 'UBI debate.',
+      sides: { for: ['Reduces poverty [1]'], against: ['Fiscally costly [2]'] },
+      sources: []
+    })
+    const r = parseLens(raw, 'twosides')
+    expect(r?.sides?.for).toEqual(['Reduces poverty [1]'])
+    expect(r?.sides?.against).toHaveLength(1)
+  })
+  it('returns null when the shape is empty/unusable', () => {
+    expect(parseLens('{"intro":"x"}', 'evidence')).toBeNull()
+    expect(parseLens('not json', 'timeline')).toBeNull()
+  })
+})
+
+describe('buildLensPrompt', () => {
+  it('asks for the right lens with policy grounding + context', () => {
+    const msgs = buildLensPrompt('Gig economy regulation', 'stakeholders', 'prior synthesis text')
+    expect(msgs[0].content).toMatch(/Stakeholder map/)
+    expect(msgs[0].content).toMatch(/WEB SEARCH/)
+    expect(msgs[1].content).toContain('Gig economy regulation')
+    expect(msgs[1].content).toContain('prior synthesis text')
   })
 })
 

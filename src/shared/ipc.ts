@@ -31,6 +31,8 @@ export const IPC = {
   tutorAsk: 'tutor:ask',
   /** Ask a web research question in a thread (new if no threadId). */
   researchAsk: 'research:ask',
+  /** Generate a structured policy lens (stakeholder map / two sides / evidence / timeline). */
+  researchLens: 'research:lens',
   /** List saved conversation threads for a tab (Recents). */
   threadsList: 'threads:list',
   /** Load a full thread with its turns. */
@@ -151,9 +153,28 @@ export type ResearchReply = {
 
 export type ResearchRequest = { question: string; threadId?: string }
 
-// A turn's answer is a tutor reply (slides/text) or a research reply — both are
-// persisted in the same thread store, discriminated by `kind`.
-export type ThreadAnswer = TutorReply | ResearchReply
+// Structured policy lenses — on-demand analysis primitives over a research
+// topic. Each maps to a Bardach step and later flows into Projects.
+export type LensKind = 'stakeholders' | 'twosides' | 'evidence' | 'timeline'
+
+export type LensTable = { columns: string[]; rows: string[][] }
+
+export type LensReply = {
+  kind: 'lens'
+  lens: LensKind
+  title: string
+  intro: string // 1-2 sentence framing
+  table?: LensTable // stakeholders / evidence / timeline
+  sides?: { for: string[]; against: string[] } // twosides
+  sources: ResearchSource[]
+  engineId: string
+}
+
+export type LensRequest = { threadId: string; question: string; lens: LensKind; context?: string }
+
+// A turn's answer is a tutor reply (slides/text), a research reply, or a
+// structured lens — all persisted in the same thread store, discriminated by `kind`.
+export type ThreadAnswer = TutorReply | ResearchReply | LensReply
 
 export type Turn = { id: string; question: string; answer: ThreadAnswer; createdAt: string }
 

@@ -6,7 +6,15 @@ import { studyBrain } from './services/studyBrain'
 import { agentCliEngine } from './engine/agentCli'
 import { imageEngine } from './illustrate/imageEngine'
 import { extractConcepts } from './illustrate/extract'
-import type { AskRequest, IllustrationImage, IllustrationSpec, QuizResult, QuizSpec, ResearchRequest } from '../shared/ipc'
+import type {
+  AskRequest,
+  IllustrationImage,
+  IllustrationSpec,
+  LensRequest,
+  QuizResult,
+  QuizSpec,
+  ResearchRequest
+} from '../shared/ipc'
 
 // Builder batch: pre-generate the illustration library for the real courses.
 // PGP_DEV_BUILD_LIBRARY=1 (PGP_DEV_CLEAR_LIBRARY=1 to wipe first after a style
@@ -152,6 +160,7 @@ function registerIpc(): void {
 
   ipcMain.handle(IPC.tutorAsk, (_e, req: AskRequest) => studyBrain.ask(req))
   ipcMain.handle(IPC.researchAsk, (_e, req: ResearchRequest) => studyBrain.research(req))
+  ipcMain.handle(IPC.researchLens, (_e, req: LensRequest) => studyBrain.researchLens(req))
   ipcMain.handle(IPC.threadsList, (_e, tab?: string) => studyBrain.listThreads(tab))
   ipcMain.handle(IPC.threadGet, (_e, id: string) => studyBrain.getThread(id))
   ipcMain.handle(IPC.threadDelete, (_e, id: string) => studyBrain.deleteThread(id))
@@ -191,13 +200,34 @@ app.whenReady().then(() => {
   // Verify web research end-to-end: PGP_DEV_RESEARCH="a question".
   if (process.env['PGP_DEV_RESEARCH']) {
     void (async () => {
-      const { turn } = await studyBrain.research({ question: process.env['PGP_DEV_RESEARCH'] as string })
+      const { turn, threadId } = await studyBrain.research({ question: process.env['PGP_DEV_RESEARCH'] as string })
       const a = turn.answer
       if (a.kind !== 'research') return
       console.log(`[research] synthesis (${a.synthesis.length} chars):`, a.synthesis.slice(0, 200))
       console.log(`[research] ${a.sources.length} sources:`)
       for (const s of a.sources) console.log(`[research]  [${s.n}] ${s.type.padEnd(10)} ${s.title.slice(0, 55)} — ${s.url}`)
       console.log('[research] followups:', JSON.stringify(a.followups))
+
+      // Also exercise a structured lens on the same thread.
+      const lensKind = (process.env['PGP_DEV_LENS'] as 'stakeholders' | 'twosides' | 'evidence' | 'timeline') || 'stakeholders'
+      const lensRes = await studyBrain.researchLens({
+        threadId,
+        question: process.env['PGP_DEV_RESEARCH'] as string,
+        lens: lensKind,
+        context: a.synthesis
+      })
+      const l = lensRes.turn.answer
+      if (l.kind === 'lens') {
+        console.log(`[lens] ${l.title}: ${l.intro.slice(0, 120)}`)
+        if (l.table) {
+          console.log(`[lens] columns: ${l.table.columns.join(' | ')}`)
+          for (const row of l.table.rows.slice(0, 6)) console.log(`[lens]   ${row.join(' | ')}`)
+        }
+        if (l.sides) {
+          console.log(`[lens] FOR: ${l.sides.for.length} · AGAINST: ${l.sides.against.length}`)
+        }
+        console.log(`[lens] ${l.sources.length} sources`)
+      }
     })().catch((e) => console.error('[research] failed:', e))
   }
 
@@ -314,7 +344,7 @@ app.whenReady().then(() => {
         if (process.env['PGP_DEV_AUTOASK']) {
           const { turn } = await studyBrain.ask({ question: process.env['PGP_DEV_AUTOASK'] })
           const ans = turn.answer
-          if (ans.kind !== 'research') {
+          if (ans.kind === 'slides' || ans.kind === 'text') {
             console.log(
               `[pgp] dev reply kind=${ans.kind}:`,
               ans.kind === 'slides'

@@ -152,9 +152,10 @@ export async function runTutor(input: TutorInput, deps: TutorDeps): Promise<Tuto
   }
 }
 
-/** Compact a stored answer (tutor or research) for use as context in later turns. */
+/** Compact a stored answer (tutor / research / lens) for use as context later. */
 export function summariseReply(r: ThreadAnswer): string {
   if (r.kind === 'research') return truncate(r.synthesis, 400)
+  if (r.kind === 'lens') return `${r.title}: ${truncate(r.intro, 200)}`
   if (r.kind === 'slides') return r.slides.map((s) => s.heading).join(' · ')
   return truncate(r.text, 400)
 }

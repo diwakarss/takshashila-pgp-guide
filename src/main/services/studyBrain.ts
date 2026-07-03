@@ -9,7 +9,7 @@ import { classifyCourse } from '../corpus/course'
 import { imageEngine } from '../illustrate/imageEngine'
 import { agentCliEngine } from '../engine/agentCli'
 import { runTutor, summariseReply, type TurnContext } from './tutor'
-import { runResearch } from './research'
+import { runResearch, runLens, lensTitle } from './research'
 import { generateQuiz, gradeFreeform } from './quiz'
 import { xpForAttempt, levelFromXp, currentStreak, bestStreak, dayKey } from './gamify'
 import type {
@@ -27,6 +27,7 @@ import type {
   QuizSpec,
   QuizStats,
   QuizVerdict,
+  LensRequest,
   SearchHit,
   Thread,
   ThreadDetail,
@@ -181,6 +182,22 @@ class StudyBrainService {
     const reply = await runResearch({ question: req.question, history }, { engine: agentCliEngine })
     const turn = await brain.appendTurn(threadId, { id: randomUUID(), question: req.question, answer: reply })
     return { threadId, turn }
+  }
+
+  /** Generate a structured policy lens for a research topic and append it to the
+   *  thread as a lens turn (labelled by the lens title). */
+  async researchLens(req: LensRequest): Promise<AskResult> {
+    const brain = await this.open()
+    const reply = await runLens(
+      { question: req.question, lens: req.lens, context: req.context },
+      { engine: agentCliEngine }
+    )
+    const turn = await brain.appendTurn(req.threadId, {
+      id: randomUUID(),
+      question: lensTitle(req.lens),
+      answer: reply
+    })
+    return { threadId: req.threadId, turn }
   }
 
   async listThreads(tab = 'tutor'): Promise<Thread[]> {

@@ -113,7 +113,8 @@ export function Tutor(props: {
 
   const courseName = courseCode ? courses.find((c) => c.code === courseCode)?.name ?? courseCode : 'all courses'
   const turns = thread?.turns ?? []
-  const lastFollowups = turns.length > 0 ? turns[turns.length - 1].answer.followups : []
+  const lastAnswer = turns.length > 0 ? turns[turns.length - 1].answer : null
+  const lastFollowups = lastAnswer && lastAnswer.kind !== 'lens' ? lastAnswer.followups : []
 
   return (
     <div className="tutor">

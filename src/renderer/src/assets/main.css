@@ -1296,3 +1296,121 @@ a.source-line-title:hover {
   color: var(--muted);
   background: color-mix(in srgb, var(--muted) 12%, transparent);
 }
+
+/* ── research: structured policy lenses ─────────────────── */
+.lens-bar {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px solid var(--hairline);
+}
+.lens-bar-label {
+  font-size: 12px;
+  color: var(--muted);
+  margin-right: 2px;
+}
+.lens-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font: inherit;
+  font-size: 13px;
+  padding: 5px 10px;
+  border: 1px solid color-mix(in srgb, var(--brand) 30%, transparent);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--brand) 6%, var(--surface));
+  color: var(--brand);
+  cursor: pointer;
+}
+.lens-btn:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--brand) 12%, var(--surface));
+}
+.lens-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.lens-card {
+  border: 1px solid var(--hairline);
+  border-left: 3px solid var(--brand);
+  border-radius: var(--radius-card);
+  padding: 16px 18px;
+  background: var(--surface);
+}
+.lens-head {
+  font-weight: 600;
+  font-size: 15px;
+  margin-bottom: 6px;
+}
+.lens-intro {
+  color: var(--muted);
+  margin-bottom: 12px;
+}
+.lens-table-wrap {
+  overflow-x: auto;
+}
+.lens-table {
+  border-collapse: collapse;
+  width: 100%;
+  font-size: 14px;
+}
+.lens-table th,
+.lens-table td {
+  text-align: left;
+  vertical-align: top;
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--hairline);
+}
+.lens-table th {
+  font-weight: 600;
+  color: var(--muted);
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  white-space: nowrap;
+}
+.lens-table tbody tr:last-child td {
+  border-bottom: none;
+}
+.lens-sides {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+}
+.lens-side {
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius-control);
+  padding: 10px 14px;
+}
+.lens-side.for {
+  border-top: 2px solid var(--success);
+}
+.lens-side.against {
+  border-top: 2px solid var(--danger);
+}
+.lens-side-head {
+  font-weight: 600;
+  font-size: 13px;
+  margin-bottom: 6px;
+}
+.lens-side.for .lens-side-head {
+  color: var(--success);
+}
+.lens-side.against .lens-side-head {
+  color: var(--danger);
+}
+.lens-side ul {
+  margin: 0;
+  padding-left: 18px;
+  font-size: 14px;
+}
+.lens-side li {
+  margin-bottom: 6px;
+}
+@media (max-width: 720px) {
+  .lens-sides {
+    grid-template-columns: 1fr;
+  }
+}

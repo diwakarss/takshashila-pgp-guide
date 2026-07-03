@@ -1,7 +1,14 @@
 import { useEffect, useRef, useState } from 'react'
-import { Search, ExternalLink } from 'lucide-react'
+import { Search, ExternalLink, Users, Scale, Table2, Clock } from 'lucide-react'
 import { Md, toSuperscriptCitations } from '../components/Markdown'
-import type { EngineStatus, ResearchSource, SourceType, ThreadDetail, Turn } from '../../../shared/ipc'
+import type { EngineStatus, LensKind, LensReply, ResearchSource, SourceType, ThreadDetail, Turn } from '../../../shared/ipc'
+
+const LENS_BAR: { kind: LensKind; label: string; icon: typeof Users }[] = [
+  { kind: 'stakeholders', label: 'Stakeholder map', icon: Users },
+  { kind: 'twosides', label: 'Two sides', icon: Scale },
+  { kind: 'evidence', label: 'Evidence table', icon: Table2 },
+  { kind: 'timeline', label: 'Timeline', icon: Clock }
+]
 
 // Research — a web-first, policy-focused research surface. Ask any topic → a
 // cited synthesis over type-graded web sources → policy follow-ups. Threaded
@@ -20,6 +27,7 @@ export function Research(props: {
   const [q, setQ] = useState('')
   const [busy, setBusy] = useState(false)
   const [pending, setPending] = useState<string | null>(null)
+  const [pendingLens, setPendingLens] = useState<{ label: string } | null>(null)
   const [error, setError] = useState<string | null>(null)
   const scrollRef = useRef<HTMLDivElement>(null)
 
@@ -34,9 +42,27 @@ export function Research(props: {
   useEffect(() => {
     const el = scrollRef.current
     if (el) el.scrollTop = el.scrollHeight
-  }, [thread, pending])
+  }, [thread, pending, pendingLens])
 
   const engineReady = engine?.available ?? false
+
+  const runLens = async (question: string, lens: LensKind, context: string): Promise<void> => {
+    if (!thread || busy) return
+    setBusy(true)
+    setError(null)
+    setPendingLens({ label: LENS_BAR.find((l) => l.kind === lens)?.label ?? 'lens' })
+    try {
+      const res = await window.pgp.researchLens({ threadId: thread.id, question, lens, context })
+      const detail = await window.pgp.getThread(res.threadId)
+      setThread(detail)
+      onThreadsChanged()
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e))
+    } finally {
+      setBusy(false)
+      setPendingLens(null)
+    }
+  }
 
   const ask = async (question: string): Promise<void> => {
     if (!question.trim() || busy) return
@@ -72,7 +98,9 @@ export function Research(props: {
   }
 
   const turns = thread?.turns ?? []
-  const lastFollowups = turns.length > 0 ? turns[turns.length - 1].answer.followups : []
+  // Follow-ups come from the last research answer (a lens turn has none).
+  const lastResearch = [...turns].reverse().find((t) => t.answer.kind === 'research')
+  const lastFollowups = lastResearch?.answer.kind === 'research' ? lastResearch.answer.followups : []
 
   return (
     <div className="tutor research">
@@ -99,7 +127,7 @@ export function Research(props: {
         )}
 
         {turns.map((turn) => (
-          <ResearchTurnView key={turn.id} turn={turn} />
+          <ResearchTurnView key={turn.id} turn={turn} busy={busy} onLens={runLens} />
         ))}
 
         {pending && (
@@ -107,6 +135,13 @@ export function Research(props: {
             <div className="turn-q">{pending}</div>
             <div className="turn-a">
               <p className="muted small thinking">Researching the web…</p>
+            </div>
+          </div>
+        )}
+        {pendingLens && (
+          <div className="turn">
+            <div className="turn-a">
+              <p className="muted small thinking">Building {pendingLens.label}…</p>
             </div>
           </div>
         )}
@@ -140,8 +175,16 @@ export function Research(props: {
   )
 }
 
-function ResearchTurnView({ turn }: { turn: Turn }): JSX.Element {
+function ResearchTurnView(props: {
+  turn: Turn
+  busy: boolean
+  onLens: (question: string, lens: LensKind, context: string) => void
+}): JSX.Element {
+  const { turn, busy, onLens } = props
   const a = turn.answer
+
+  if (a.kind === 'lens') return <LensView lens={a} />
+
   if (a.kind !== 'research') return <></>
   return (
     <div className="turn">
@@ -151,6 +194,83 @@ function ResearchTurnView({ turn }: { turn: Turn }): JSX.Element {
           <Md>{toSuperscriptCitations(a.synthesis)}</Md>
         </div>
         {a.sources.length > 0 && <ResearchSources sources={a.sources} />}
+        <div className="lens-bar">
+          <span className="lens-bar-label">Analyse:</span>
+          {LENS_BAR.map(({ kind, label, icon: Icon }) => (
+            <button
+              key={kind}
+              className="lens-btn"
+              disabled={busy}
+              title={`Build a ${label.toLowerCase()} for this topic`}
+              onClick={() => onLens(turn.question, kind, a.synthesis)}
+            >
+              <Icon size={14} /> {label}
+            </button>
+          ))}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function LensView({ lens }: { lens: LensReply }): JSX.Element {
+  return (
+    <div className="turn">
+      <div className="turn-a">
+        <div className="lens-card">
+          <div className="lens-head">{lens.title}</div>
+          {lens.intro && (
+            <div className="answer-md lens-intro">
+              <Md>{toSuperscriptCitations(lens.intro)}</Md>
+            </div>
+          )}
+
+          {lens.sides && (
+            <div className="lens-sides">
+              <div className="lens-side for">
+                <div className="lens-side-head">For</div>
+                <ul>
+                  {lens.sides.for.map((p, i) => (
+                    <li key={i}>{toSuperscriptCitations(p)}</li>
+                  ))}
+                </ul>
+              </div>
+              <div className="lens-side against">
+                <div className="lens-side-head">Against</div>
+                <ul>
+                  {lens.sides.against.map((p, i) => (
+                    <li key={i}>{toSuperscriptCitations(p)}</li>
+                  ))}
+                </ul>
+              </div>
+            </div>
+          )}
+
+          {lens.table && (
+            <div className="lens-table-wrap">
+              <table className="lens-table">
+                <thead>
+                  <tr>
+                    {lens.table.columns.map((c) => (
+                      <th key={c}>{c}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {lens.table.rows.map((row, ri) => (
+                    <tr key={ri}>
+                      {row.map((cell, ci) => (
+                        <td key={ci}>{toSuperscriptCitations(cell)}</td>
+                      ))}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+
+          {lens.sources.length > 0 && <ResearchSources sources={lens.sources} />}
+        </div>
       </div>
     </div>
   )
