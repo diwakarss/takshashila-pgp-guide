@@ -422,6 +422,28 @@ export class Brain {
     return this.getNotebookPage(pageId)
   }
 
+  async updateSnippet(pageId: string, snippetId: string, text: string): Promise<NotebookPage | null> {
+    const page = await this.getNotebookPage(pageId)
+    if (!page) return null
+    const snippets = page.snippets.map((s) => (s.id === snippetId ? { ...s, text } : s))
+    await this.db.query(`UPDATE notebook_pages SET snippets = $2, updated_at = now() WHERE id = $1`, [
+      pageId,
+      JSON.stringify(snippets)
+    ])
+    return this.getNotebookPage(pageId)
+  }
+
+  async deleteSnippet(pageId: string, snippetId: string): Promise<NotebookPage | null> {
+    const page = await this.getNotebookPage(pageId)
+    if (!page) return null
+    const snippets = page.snippets.filter((s) => s.id !== snippetId)
+    await this.db.query(`UPDATE notebook_pages SET snippets = $2, updated_at = now() WHERE id = $1`, [
+      pageId,
+      JSON.stringify(snippets)
+    ])
+    return this.getNotebookPage(pageId)
+  }
+
   async deleteNotebookPage(id: string): Promise<void> {
     await this.db.query(`DELETE FROM notebook_pages WHERE id = $1`, [id])
   }

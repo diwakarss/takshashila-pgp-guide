@@ -251,6 +251,16 @@ class StudyBrainService {
     await brain.deleteNotebookPage(id)
   }
 
+  async updateSnippet(pageId: string, snippetId: string, text: string): Promise<NotebookPage | null> {
+    const brain = await this.open()
+    return brain.updateSnippet(pageId, snippetId, text)
+  }
+
+  async deleteSnippet(pageId: string, snippetId: string): Promise<NotebookPage | null> {
+    const brain = await this.open()
+    return brain.deleteSnippet(pageId, snippetId)
+  }
+
   /** Capture a highlight into an existing page, or a new one when newTitle is
    *  given. Returns the page the snippet landed on. */
   async addSnippet(req: AddSnippetRequest): Promise<NotebookPage | null> {

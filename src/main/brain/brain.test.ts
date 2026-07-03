@@ -124,7 +124,22 @@ describe('Brain (PGLite + pgvector)', () => {
     expect((await brain.listNotebookPages('Union Budget')).map((p) => p.id)).toEqual(['p1'])
     expect(await brain.listNotebookPages('nonexistent term')).toEqual([])
 
-    // Edit + delete.
+    // Edit a snippet, then delete it (leaving the page).
+    await brain.appendSnippet('p1', {
+      id: 's2',
+      text: 'Second note.',
+      sources: [],
+      from: 'Tutor: x',
+      createdAt: '2026-07-03T01:00:00Z'
+    })
+    await brain.updateSnippet('p1', 's1', 'Edited first note.')
+    let p = await brain.getNotebookPage('p1')
+    expect(p?.snippets.find((s) => s.id === 's1')?.text).toBe('Edited first note.')
+    await brain.deleteSnippet('p1', 's1')
+    p = await brain.getNotebookPage('p1')
+    expect(p?.snippets.map((s) => s.id)).toEqual(['s2'])
+
+    // Edit + delete the page.
     await brain.updateNotebookPage('p1', { title: 'Fiscal deficit', body: 'my notes' })
     expect((await brain.getNotebookPage('p1'))?.title).toBe('Fiscal deficit')
     await brain.deleteNotebookPage('p1')

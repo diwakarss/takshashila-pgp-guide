@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { NotebookPen, Plus, Search, Trash2, ExternalLink } from 'lucide-react'
+import { NotebookPen, Plus, Search, Trash2, ExternalLink, Pencil } from 'lucide-react'
 import { Md } from '../components/Markdown'
 import type { NotebookPage, NotebookPageSummary, NoteSource } from '../../../shared/ipc'
 
@@ -17,6 +17,10 @@ export function Notebook(props: { version: number }): JSX.Element {
   const [saveState, setSaveState] = useState<'idle' | 'saving' | 'saved'>('idle')
   const [confirmDelete, setConfirmDelete] = useState(false)
   const [hovered, setHovered] = useState<string | null>(null) // snippet id under the cursor
+  const [pinned, setPinned] = useState<string | null>(null) // clicked note → filter sources to it
+  const [editingId, setEditingId] = useState<string | null>(null)
+  const [editText, setEditText] = useState('')
+  const [confirmSnip, setConfirmSnip] = useState<string | null>(null) // snippet pending delete
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const refresh = (q = query): void => {
@@ -38,6 +42,9 @@ export function Notebook(props: { version: number }): JSX.Element {
   const select = (id: string): void => {
     setSelectedId(id)
     setConfirmDelete(false)
+    setPinned(null)
+    setEditingId(null)
+    setConfirmSnip(null)
     void window.pgp.notebookGet(id).then((p) => {
       setPage(p)
       setTitle(p?.title ?? '')
@@ -78,12 +85,32 @@ export function Notebook(props: { version: number }): JSX.Element {
     refresh()
   }
 
+  const saveSnippet = async (snippetId: string): Promise<void> => {
+    if (!selectedId) return
+    const p = await window.pgp.updateSnippet(selectedId, snippetId, editText.trim())
+    if (p) setPage(p)
+    setEditingId(null)
+    refresh()
+  }
+
+  const removeSnippet = async (snippetId: string): Promise<void> => {
+    if (!selectedId) return
+    const p = await window.pgp.deleteSnippet(selectedId, snippetId)
+    if (p) setPage(p)
+    if (pinned === snippetId) setPinned(null)
+    setConfirmSnip(null)
+    refresh()
+  }
+
   const sourceKey = (s: NoteSource): string => (s.url || s.title).toLowerCase()
-  const bibliography = dedupeSources(page?.snippets.flatMap((s) => s.sources) ?? [])
-  // Keys of the sources belonging to the hovered snippet (to highlight them).
-  const hoveredKeys = hovered
-    ? new Set((page?.snippets.find((s) => s.id === hovered)?.sources ?? []).map(sourceKey))
-    : null
+  // Clicking a note pins it → the bibliography shows ONLY that note's sources.
+  const pinnedSnippet = pinned ? page?.snippets.find((s) => s.id === pinned) ?? null : null
+  const bibliography = dedupeSources(pinnedSnippet ? pinnedSnippet.sources : page?.snippets.flatMap((s) => s.sources) ?? [])
+  // When not pinned, hovering a note highlights its sources within the full list.
+  const hoveredKeys =
+    !pinned && hovered
+      ? new Set((page?.snippets.find((s) => s.id === hovered)?.sources ?? []).map(sourceKey))
+      : null
 
   return (
     <div className="notebook">
@@ -158,27 +185,81 @@ export function Notebook(props: { version: number }): JSX.Element {
 
             {page.snippets.length > 0 && (
               <div className="nb-snippets">
-                <div className="recents-label">Captured from research</div>
-                {page.snippets.map((s) => (
-                  <blockquote
-                    key={s.id}
-                    className={`nb-snippet answer-md${hovered === s.id ? ' active' : ''}`}
-                    onMouseEnter={() => setHovered(s.id)}
-                    onMouseLeave={() => setHovered(null)}
-                  >
-                    <Md>{s.text}</Md>
-                    <footer className="muted small">
-                      {s.from}
-                      {s.sources.length > 0 && ` · ${s.sources.length} source${s.sources.length === 1 ? '' : 's'}`}
-                    </footer>
-                  </blockquote>
-                ))}
+                <div className="recents-label">Captured notes</div>
+                {page.snippets.map((s) =>
+                  editingId === s.id ? (
+                    <div key={s.id} className="nb-snippet editing">
+                      <textarea
+                        className="nb-snippet-edit"
+                        value={editText}
+                        autoFocus
+                        onChange={(e) => setEditText(e.target.value)}
+                      />
+                      <div className="nb-snippet-actions">
+                        <button className="btn" onClick={() => setEditingId(null)}>
+                          Cancel
+                        </button>
+                        <button className="btn primary" onClick={() => void saveSnippet(s.id)}>
+                          Save
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <blockquote
+                      key={s.id}
+                      className={`nb-snippet answer-md${pinned === s.id ? ' pinned' : ''}${
+                        !pinned && hovered === s.id ? ' active' : ''
+                      }`}
+                      title="Click to show only this note’s sources"
+                      onMouseEnter={() => setHovered(s.id)}
+                      onMouseLeave={() => setHovered(null)}
+                      onClick={() => setPinned((p) => (p === s.id ? null : s.id))}
+                    >
+                      <div className="nb-snippet-tools" onClick={(e) => e.stopPropagation()}>
+                        <button
+                          className="icon-btn"
+                          title="Edit note"
+                          onClick={() => {
+                            setEditingId(s.id)
+                            setEditText(s.text)
+                          }}
+                        >
+                          <Pencil size={14} />
+                        </button>
+                        <button
+                          className={`icon-btn${confirmSnip === s.id ? ' danger' : ''}`}
+                          title={confirmSnip === s.id ? 'Click again to delete' : 'Delete note'}
+                          onClick={() => (confirmSnip === s.id ? void removeSnippet(s.id) : setConfirmSnip(s.id))}
+                          onBlur={() => setConfirmSnip(null)}
+                        >
+                          <Trash2 size={14} />
+                        </button>
+                      </div>
+                      <Md>{s.text}</Md>
+                      <footer className="muted small">
+                        {s.from}
+                        {s.sources.length > 0 && ` · ${s.sources.length} source${s.sources.length === 1 ? '' : 's'}`}
+                        {` · ${new Date(s.createdAt).toLocaleString([], {
+                          dateStyle: 'medium',
+                          timeStyle: 'short'
+                        })}`}
+                      </footer>
+                    </blockquote>
+                  )
+                )}
               </div>
             )}
 
             {bibliography.length > 0 && (
               <div className="nb-biblio">
-                <div className="recents-label">Sources / bibliography</div>
+                <div className="nb-biblio-head">
+                  <span className="recents-label">{pinned ? 'Sources for this note' : 'Sources / bibliography'}</span>
+                  {pinned && (
+                    <button className="nb-showall" onClick={() => setPinned(null)}>
+                      Show all
+                    </button>
+                  )}
+                </div>
                 <ol className="source-list">
                   {bibliography.map((s, i) => {
                     const on = hoveredKeys?.has(sourceKey(s))

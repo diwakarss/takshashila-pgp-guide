@@ -174,6 +174,12 @@ function registerIpc(): void {
     studyBrain.updateNotebookPage(req.id, { title: req.title, body: req.body })
   )
   ipcMain.handle(IPC.notebookAddSnippet, (_e, req: AddSnippetRequest) => studyBrain.addSnippet(req))
+  ipcMain.handle(IPC.notebookUpdateSnippet, (_e, req: { pageId: string; snippetId: string; text: string }) =>
+    studyBrain.updateSnippet(req.pageId, req.snippetId, req.text)
+  )
+  ipcMain.handle(IPC.notebookDeleteSnippet, (_e, req: { pageId: string; snippetId: string }) =>
+    studyBrain.deleteSnippet(req.pageId, req.snippetId)
+  )
   ipcMain.handle(IPC.notebookDelete, (_e, id: string) => studyBrain.deleteNotebookPage(id))
   ipcMain.handle(IPC.threadsList, (_e, tab?: string) => studyBrain.listThreads(tab))
   ipcMain.handle(IPC.threadGet, (_e, id: string) => studyBrain.getThread(id))

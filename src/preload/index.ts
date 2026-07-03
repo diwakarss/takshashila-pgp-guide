@@ -54,6 +54,10 @@ const api = {
   notebookUpdate: (id: string, title: string, body: string): Promise<NotebookPage | null> =>
     ipcRenderer.invoke(IPC.notebookUpdate, { id, title, body }),
   addSnippet: (req: AddSnippetRequest): Promise<NotebookPage | null> => ipcRenderer.invoke(IPC.notebookAddSnippet, req),
+  updateSnippet: (pageId: string, snippetId: string, text: string): Promise<NotebookPage | null> =>
+    ipcRenderer.invoke(IPC.notebookUpdateSnippet, { pageId, snippetId, text }),
+  deleteSnippet: (pageId: string, snippetId: string): Promise<NotebookPage | null> =>
+    ipcRenderer.invoke(IPC.notebookDeleteSnippet, { pageId, snippetId }),
   notebookDelete: (id: string): Promise<void> => ipcRenderer.invoke(IPC.notebookDelete, id),
   listThreads: (tab = 'tutor'): Promise<Thread[]> => ipcRenderer.invoke(IPC.threadsList, tab),
   getThread: (id: string): Promise<ThreadDetail | null> => ipcRenderer.invoke(IPC.threadGet, id),

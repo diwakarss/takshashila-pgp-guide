@@ -43,6 +43,8 @@ export const IPC = {
   notebookCreate: 'notebook:create',
   notebookUpdate: 'notebook:update',
   notebookAddSnippet: 'notebook:add',
+  notebookUpdateSnippet: 'notebook:snippet:update',
+  notebookDeleteSnippet: 'notebook:snippet:delete',
   notebookDelete: 'notebook:delete',
   /** List saved conversation threads for a tab (Recents). */
   threadsList: 'threads:list',
