@@ -63,8 +63,9 @@ export function App(): JSX.Element {
     setTab('tutor')
   }
 
+  const forceWizard = typeof location !== 'undefined' && location.hash === '#wizard'
   if (onboarded === null) return <div className="shell" />
-  if (!onboarded) return <Wizard onDone={() => setOnboarded(true)} />
+  if (!onboarded || forceWizard) return <Wizard onDone={() => setOnboarded(true)} />
 
   return (
     <div className="shell">

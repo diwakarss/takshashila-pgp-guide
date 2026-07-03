@@ -86,6 +86,7 @@ async function buildLibrary(): Promise<void> {
 // └─────────────────────────────────────────────────────────────────────┘
 
 const isDev = !app.isPackaged
+let devWindow: BrowserWindow | null = null
 
 function createWindow(): void {
   const mainWindow = new BrowserWindow({
@@ -105,6 +106,7 @@ function createWindow(): void {
     }
   })
 
+  devWindow = mainWindow
   mainWindow.on('ready-to-show', () => {
     mainWindow.show()
     console.log('[pgp] window ready')
@@ -243,6 +245,42 @@ app.whenReady().then(() => {
 
   if (process.env['PGP_DEV_BUILD_LIBRARY']) {
     void buildLibrary().catch((e) => console.error('[lib] build failed:', e))
+  }
+
+  // QA: screenshot each surface for a visual review (PGP_DEV_SHOTS=1).
+  if (process.env['PGP_DEV_SHOTS']) {
+    void (async () => {
+      const wait = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms))
+      await wait(5000)
+      const win = devWindow
+      if (!win) return
+      const dir = '/tmp/pgp-shots'
+      mkdirSync(dir, { recursive: true })
+      const shoot = async (name: string): Promise<void> => {
+        await wait(1400)
+        const img = await win.webContents.capturePage()
+        writeFileSync(join(dir, `${name}.png`), img.toPNG())
+        console.log(`[shots] ${name}`)
+      }
+      const clickNav = (label: string): Promise<unknown> =>
+        win.webContents.executeJavaScript(
+          `(()=>{const b=[...document.querySelectorAll('.nav-item')].find(x=>x.textContent.trim()===${JSON.stringify(label)});if(b){b.click();return true}return false})()`
+        )
+      for (const label of ['Tutor', 'Quiz', 'Research', 'Notebook', 'Projects', 'Settings']) {
+        await clickNav(label)
+        await shoot(label.toLowerCase())
+      }
+      // Projects editor: open the first project card.
+      await clickNav('Projects')
+      await wait(600)
+      await win.webContents.executeJavaScript(`(()=>{const c=document.querySelector('.proj-card');if(c)c.click()})()`)
+      await shoot('projects-editor')
+      // Wizard (force via hash).
+      await win.webContents.executeJavaScript(`location.hash='#wizard';location.reload()`)
+      await wait(2500)
+      await shoot('wizard')
+      console.log('[shots] done ->', dir)
+    })().catch((e) => console.error('[shots] failed:', e))
   }
 
   // Verify the notebook capture path end-to-end, self-cleaning.
