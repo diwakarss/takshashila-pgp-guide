@@ -30,6 +30,7 @@ export interface Engine {
   readonly capabilities: EngineCapabilities
   /** Health check (eng D4): is this engine usable right now? Never throws. */
   isAvailable(): Promise<boolean>
-  /** One-shot completion. Throws on failure so callers can fall back. */
-  complete(messages: EngineMessage[], opts?: { timeoutMs?: number }): Promise<string>
+  /** One-shot completion. Throws on failure so callers can fall back.
+   *  webSearch: allow the engine to search the web to augment its answer. */
+  complete(messages: EngineMessage[], opts?: { timeoutMs?: number; webSearch?: boolean }): Promise<string>
 }

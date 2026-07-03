@@ -130,11 +130,30 @@ h2 {
   background: var(--danger);
 }
 
+/* ── main column: top bar + content ─────────────────────── */
+.main-col {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+.topbar {
+  flex: 0 0 auto;
+  height: 48px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 0 32px;
+  background: var(--surface);
+  border-bottom: 1px solid var(--hairline);
+}
+
 /* ── content / surfaces ─────────────────────────────────── */
 .content {
   flex: 1;
+  min-height: 0;
   overflow-y: auto;
-  padding: 28px 32px;
+  padding: 24px 32px;
 }
 .surface {
   max-width: 760px;

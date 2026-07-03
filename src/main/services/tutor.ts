@@ -27,8 +27,9 @@ function systemPrompt(courseName: string | null): string {
     '- "text": for a simple, factual, clarifying, or short question. Clear markdown; can be long if needed.',
     '',
     'Grounding: use the numbered course lessons as your primary source and cite them with light [n] markers.',
-    'You MAY add accurate, relevant knowledge beyond the lessons (including current real-world facts) to',
-    'teach fully — but do not invent citations; only [n] for the lessons given.',
+    'You have WEB SEARCH available — use it when the student needs current real-world facts (recent data,',
+    'events, figures) or when the lessons do not cover something, and weave that in to teach fully. Keep the',
+    'course lessons as the primary grounding; do not invent citations — only [n] for the lessons given.',
     '',
     'Always end with 2-3 short suggested follow-up questions the student might ask next.',
     'If prior conversation is given, treat it as context so follow-ups stay coherent.',
@@ -137,7 +138,9 @@ export async function runTutor(input: TutorInput, deps: TutorDeps): Promise<Tuto
   const hits = await deps.search(input.question, MAX_SOURCES, input.courseCode)
   const lessons = dedupeByLesson(hits)
   const courseName = lessons.find((h) => h.courseName)?.courseName ?? null
-  const raw = await deps.engine.complete(buildPrompt(input.question, lessons, courseName, input.history))
+  const raw = await deps.engine.complete(buildPrompt(input.question, lessons, courseName, input.history), {
+    webSearch: true
+  })
   const parsed = parseReply(raw)
   return {
     kind: parsed.kind,

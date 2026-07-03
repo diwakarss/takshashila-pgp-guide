@@ -56,3 +56,36 @@ Sarthak/Takshashila conversation and the app should match it before wider distri
 **Where to start:** swap the color tokens in DESIGN.md §3.1, update the wordmark in the
 shell, then re-run the dark-mode + contrast audit above against the real palette.
 
+## Ship the illustration library with the corpus (publish pipeline)
+
+**What:** Bundle the concept illustration library with the corpus so students get
+illustrations for free. Two parts that must travel together:
+1. The image PNGs (currently only in the builder's `userData/illustrations/`).
+2. The `concepts` table rows — key, title, course, **embedding**, image_file — so a
+   student's app can embedding-match a slide to a library image.
+
+**Why:** Right now the library lives only on the builder's machine. A student install
+has an empty `concepts` table → every slide illustration is a miss → blank. "Deliver
+with pre-built images" doesn't work until this ships.
+
+**Where to start:** the `publish-corpus` pipeline (PRD §7.3d) — export concepts + images
+into the corpus bundle; on import, load them into the student's brain + illustrations dir.
+
+**Depends on:** the corpus publish pipeline existing.
+
+## Hard-off illustration generation in production (student builds)
+
+**What:** An explicit "generation disabled" flag for shipped/student builds, so a slide
+illustration miss NEVER triggers image generation — regardless of any stray OpenAI key
+on the student's machine.
+
+**Why:** Today generation is only gated by `imageEngine.isAvailable()` (= "is an OpenAI
+key present?"). Students lack a key so it's safe *in practice*, but it's an implicit guard.
+An explicit production flag makes "students never generate, never get charged" a guarantee,
+not an accident of key-absence.
+
+**Where to start:** `studyBrain.resolveIllustration` — add a build/config flag checked
+before the `imageEngine.isAvailable()` branch; library-match still works, generation is
+off. Builder/dev keeps generation on.
+
+

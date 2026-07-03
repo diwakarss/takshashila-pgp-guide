@@ -20,14 +20,16 @@ type IllusEntry = { status: 'drawing' | 'done' | 'error'; dataUrl?: string; erro
 export function Tutor(props: {
   ready: boolean
   engine: EngineStatus | null
+  courses: CourseSummary[]
+  course: string
+  onCourseSynced: (code: string) => void
   openThreadId: string | null
   onOpenThread: (id: string | null) => void
   onThreadsChanged: () => void
   onGoToSettings: () => void
 }): JSX.Element {
-  const { ready, engine, openThreadId, onOpenThread, onThreadsChanged, onGoToSettings } = props
-  const [courses, setCourses] = useState<CourseSummary[]>([])
-  const [course, setCourse] = useState<string>('')
+  const { ready, engine, courses, course, onCourseSynced, openThreadId, onOpenThread, onThreadsChanged, onGoToSettings } =
+    props
   const [thread, setThread] = useState<ThreadDetail | null>(null)
   const [q, setQ] = useState('')
   const [busy, setBusy] = useState(false)
@@ -38,18 +40,15 @@ export function Tutor(props: {
   const scrollRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
-    if (ready) void window.pgp.courses().then(setCourses)
-  }, [ready])
-
-  useEffect(() => {
     if (openThreadId == null) {
       setThread(null)
       return
     }
     void window.pgp.getThread(openThreadId).then((t) => {
       setThread(t)
-      if (t?.courseCode) setCourse(t.courseCode)
+      if (t?.courseCode) onCourseSynced(t.courseCode)
     })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [openThreadId])
 
   useEffect(() => {
@@ -119,24 +118,6 @@ export function Tutor(props: {
 
   return (
     <div className="tutor">
-      <div className="tutor-bar">
-        {thread ? (
-          <span className="course-locked">{courseName}</span>
-        ) : (
-          <label className="course-select">
-            <span className="course-select-label">Course</span>
-            <select value={course} onChange={(e) => setCourse(e.target.value)} aria-label="Course scope">
-              <option value="">All courses</option>
-              {courses.map((c) => (
-                <option key={c.code} value={c.code}>
-                  {c.code} · {c.name} ({c.lessons})
-                </option>
-              ))}
-            </select>
-          </label>
-        )}
-      </div>
-
       <div className="thread-scroll" ref={scrollRef}>
         {turns.length === 0 && !busy && (
           <div className="thread-welcome">

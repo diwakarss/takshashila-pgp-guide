@@ -83,9 +83,12 @@ export class AgentCliEngine implements Engine {
     }
   }
 
-  async complete(messages: EngineMessage[], opts: { timeoutMs?: number } = {}): Promise<string> {
+  async complete(messages: EngineMessage[], opts: { timeoutMs?: number; webSearch?: boolean } = {}): Promise<string> {
     const prompt = flatten(messages)
-    return run(CLAUDE_BIN, ['-p'], prompt, opts.timeoutMs ?? 120_000)
+    // `--allowedTools` lets `claude -p` use read-only web tools without an
+    // interactive permission prompt; web search adds latency, so it's opt-in.
+    const args = opts.webSearch ? ['-p', '--allowedTools', 'WebSearch,WebFetch'] : ['-p']
+    return run(CLAUDE_BIN, args, prompt, opts.timeoutMs ?? (opts.webSearch ? 150_000 : 120_000))
   }
 }
 
