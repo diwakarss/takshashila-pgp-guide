@@ -113,6 +113,27 @@ CREATE TABLE IF NOT EXISTS notebook_pages (
 );
 CREATE INDEX IF NOT EXISTS notebook_updated_idx ON notebook_pages (updated_at DESC);
 
+-- Projects: assignment / capstone / personal writing workspaces (private). The
+-- scaffold (Bardach steps + draft + pulled-in evidence) is stored; the draft is
+-- always the student's own words — the AI coaches, it does not ghostwrite.
+CREATE TABLE IF NOT EXISTS projects (
+  id          TEXT PRIMARY KEY,
+  kind        TEXT NOT NULL,
+  title       TEXT NOT NULL,
+  course_code TEXT,
+  course_name TEXT,
+  due_at      TIMESTAMPTZ,
+  brief       TEXT NOT NULL DEFAULT '',
+  deliverable TEXT NOT NULL DEFAULT '',
+  draft       TEXT NOT NULL DEFAULT '',
+  step        INT  NOT NULL DEFAULT 0,
+  done        JSONB NOT NULL DEFAULT '[]',
+  evidence    JSONB NOT NULL DEFAULT '[]',
+  created_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at  TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS projects_updated_idx ON projects (updated_at DESC);
+
 -- Illustration library: one row per drawn concept. Matched by embedding so a
 -- concept is drawn ONCE and reused across questions/phrasings (no per-answer
 -- regeneration). Ships with the corpus so students get illustrations for free.

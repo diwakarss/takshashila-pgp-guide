@@ -10,6 +10,7 @@ import { imageEngine } from '../illustrate/imageEngine'
 import { agentCliEngine } from '../engine/agentCli'
 import { runTutor, summariseReply, type TurnContext } from './tutor'
 import { runResearch, runLens, lensTitle } from './research'
+import { runCoach, coachTitle } from './projectCoach'
 import { generateQuiz, gradeFreeform } from './quiz'
 import { xpForAttempt, levelFromXp, currentStreak, bestStreak, dayKey } from './gamify'
 import type {
@@ -31,11 +32,44 @@ import type {
   AddSnippetRequest,
   NotebookPage,
   NotebookPageSummary,
+  NoteSource,
+  Project,
+  ProjectListItem,
+  ProjectsOverview,
+  CoachAction,
+  CoachResult,
   SearchHit,
   Thread,
   ThreadDetail,
   WeakSpot
 } from '../../shared/ipc'
+import { BARDACH_STEPS } from '../../shared/ipc'
+
+// Pre-loaded assignments (would sync from Open Takshashila later). Opening one
+// creates its workspace on first open, keyed by the stable catalog id.
+const PROJECT_CATALOG = [
+  {
+    id: 'pp231-iran-demand-supply',
+    kind: 'assignment' as const,
+    title: 'Understanding the Shifts in Demand and Supply',
+    courseCode: 'PP231',
+    courseName: 'Microeconomics-I',
+    dueAt: '2026-07-10T13:30:00.000Z', // 19:00 IST
+    deliverable: '2-minute video explainer (120s)',
+    brief:
+      'The ongoing conflict in Iran has disrupted global supply chains, especially energy markets. Identify specific markets or goods where demand and supply curves have shifted as a direct or indirect consequence of the Iran war. Map these shifts and explain the economic mechanisms driving them — moving beyond immediate price changes to consider direct and indirect shifts in demand and supply, broader market repercussions, and macroeconomic spillovers. Submit a 2-minute (120s) video presenting the analysis. Individual work; email to pgp@takshashila.org.in with the anti-plagiarism and AI-use disclaimers.'
+  }
+]
+const CAPSTONE_ITEM = {
+  id: 'capstone',
+  kind: 'capstone' as const,
+  title: 'Capstone',
+  courseCode: null,
+  courseName: null,
+  dueAt: null,
+  deliverable: 'Policy document (across the programme)',
+  brief: 'Your long-running capstone project. It persists across the whole PGP — build it step by step with the scholar framework.'
+}
 
 function makeTitle(question: string): string {
   const t = question.replace(/\s+/g, ' ').trim()
@@ -259,6 +293,117 @@ class StudyBrainService {
   async deleteSnippet(pageId: string, snippetId: string): Promise<NotebookPage | null> {
     const brain = await this.open()
     return brain.deleteSnippet(pageId, snippetId)
+  }
+
+  // ── projects ──────────────────────────────────────────────────────────
+
+  async projectsOverview(): Promise<ProjectsOverview> {
+    const brain = await this.open()
+    const started = await brain.listProjects()
+    const byId = new Map(started.map((p) => [p.id, p]))
+    const steps = BARDACH_STEPS.length
+    const toItem = (base: (typeof PROJECT_CATALOG)[number] | typeof CAPSTONE_ITEM): ProjectListItem => {
+      const p = byId.get(base.id)
+      return {
+        id: base.id,
+        kind: base.kind,
+        title: p?.title ?? base.title,
+        courseCode: base.courseCode,
+        courseName: base.courseName,
+        dueAt: base.dueAt,
+        deliverable: base.deliverable,
+        started: !!p,
+        progress: p ? p.done.length / steps : 0,
+        updatedAt: p?.updatedAt ?? null
+      }
+    }
+    const personal: ProjectListItem[] = started
+      .filter((p) => p.kind === 'personal')
+      .map((p) => ({
+        id: p.id,
+        kind: 'personal',
+        title: p.title,
+        courseCode: p.courseCode,
+        courseName: p.courseName,
+        dueAt: p.dueAt,
+        deliverable: p.deliverable,
+        started: true,
+        progress: p.done.length / steps,
+        updatedAt: p.updatedAt
+      }))
+    return { assignments: PROJECT_CATALOG.map(toItem), capstone: toItem(CAPSTONE_ITEM), personal }
+  }
+
+  /** Open (creating on first open from the catalog) a project by id. */
+  async openProject(id: string): Promise<Project | null> {
+    const brain = await this.open()
+    const existing = await brain.getProject(id)
+    if (existing) return existing
+    const cat = [...PROJECT_CATALOG, CAPSTONE_ITEM].find((c) => c.id === id)
+    if (!cat) return null
+    return brain.createProject({
+      id: cat.id,
+      kind: cat.kind,
+      title: cat.title,
+      courseCode: cat.courseCode,
+      courseName: cat.courseName,
+      dueAt: cat.dueAt,
+      brief: cat.brief,
+      deliverable: cat.deliverable
+    })
+  }
+
+  async createPersonalProject(title: string): Promise<Project> {
+    const brain = await this.open()
+    return brain.createProject({
+      id: randomUUID(),
+      kind: 'personal',
+      title: title.trim() || 'Untitled project',
+      courseCode: null,
+      courseName: null,
+      dueAt: null,
+      brief: '',
+      deliverable: 'Personal writing'
+    })
+  }
+
+  async updateProject(
+    id: string,
+    patch: { title?: string; draft?: string; step?: number; done?: number[] }
+  ): Promise<Project | null> {
+    const brain = await this.open()
+    return brain.updateProject(id, patch)
+  }
+
+  async addProjectEvidence(
+    id: string,
+    ev: { title: string; note: string; sources: NoteSource[]; pageId: string | null }
+  ): Promise<Project | null> {
+    const brain = await this.open()
+    const p = await brain.getProject(id)
+    if (!p) return null
+    return brain.updateProject(id, {
+      evidence: [...p.evidence, { id: randomUUID(), title: ev.title, note: ev.note, sources: ev.sources, pageId: ev.pageId }]
+    })
+  }
+
+  async removeProjectEvidence(id: string, evidenceId: string): Promise<Project | null> {
+    const brain = await this.open()
+    const p = await brain.getProject(id)
+    if (!p) return null
+    return brain.updateProject(id, { evidence: p.evidence.filter((e) => e.id !== evidenceId) })
+  }
+
+  async deleteProject(id: string): Promise<void> {
+    const brain = await this.open()
+    await brain.deleteProject(id)
+  }
+
+  async projectCoach(id: string, action: CoachAction): Promise<CoachResult> {
+    const brain = await this.open()
+    const p = await brain.getProject(id)
+    if (!p) return { action, title: coachTitle(action), markdown: 'Open a project first.', blocked: true }
+    return runCoach(p, action, agentCliEngine)
   }
 
   /** Capture a highlight into an existing page, or a new one when newTitle is

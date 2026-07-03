@@ -12,8 +12,14 @@ import {
   type IllustrationSpec,
   type LensRequest,
   type AddSnippetRequest,
+  type AppSettings,
+  type CoachAction,
+  type CoachResult,
+  type NoteSource,
   type NotebookPage,
   type NotebookPageSummary,
+  type Project,
+  type ProjectsOverview,
   type ImportProgress,
   type ImportResult,
   type QuizQuestion,
@@ -59,6 +65,26 @@ const api = {
   deleteSnippet: (pageId: string, snippetId: string): Promise<NotebookPage | null> =>
     ipcRenderer.invoke(IPC.notebookDeleteSnippet, { pageId, snippetId }),
   notebookDelete: (id: string): Promise<void> => ipcRenderer.invoke(IPC.notebookDelete, id),
+
+  projectsOverview: (): Promise<ProjectsOverview> => ipcRenderer.invoke(IPC.projectsOverview),
+  openProject: (id: string): Promise<Project | null> => ipcRenderer.invoke(IPC.projectOpen, id),
+  createPersonalProject: (title: string): Promise<Project> => ipcRenderer.invoke(IPC.projectCreatePersonal, title),
+  updateProject: (
+    id: string,
+    patch: { title?: string; draft?: string; step?: number; done?: number[] }
+  ): Promise<Project | null> => ipcRenderer.invoke(IPC.projectUpdate, { id, patch }),
+  addProjectEvidence: (
+    id: string,
+    evidence: { title: string; note: string; sources: NoteSource[]; pageId: string | null }
+  ): Promise<Project | null> => ipcRenderer.invoke(IPC.projectAddEvidence, { id, evidence }),
+  removeProjectEvidence: (id: string, evidenceId: string): Promise<Project | null> =>
+    ipcRenderer.invoke(IPC.projectRemoveEvidence, { id, evidenceId }),
+  deleteProject: (id: string): Promise<void> => ipcRenderer.invoke(IPC.projectDelete, id),
+  projectCoach: (id: string, action: CoachAction): Promise<CoachResult> =>
+    ipcRenderer.invoke(IPC.projectCoach, { id, action }),
+
+  getSettings: (): Promise<AppSettings> => ipcRenderer.invoke(IPC.settingsGet),
+  setSettings: (patch: Partial<AppSettings>): Promise<AppSettings> => ipcRenderer.invoke(IPC.settingsSet, patch),
   listThreads: (tab = 'tutor'): Promise<Thread[]> => ipcRenderer.invoke(IPC.threadsList, tab),
   getThread: (id: string): Promise<ThreadDetail | null> => ipcRenderer.invoke(IPC.threadGet, id),
   deleteThread: (id: string): Promise<void> => ipcRenderer.invoke(IPC.threadDelete, id),

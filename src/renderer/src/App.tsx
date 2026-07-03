@@ -1,13 +1,12 @@
 import { useEffect, useState } from 'react'
-import { FileText } from 'lucide-react'
 import { Sidebar } from './components/Sidebar'
 import { TopBar } from './components/TopBar'
 import { Tutor } from './tabs/Tutor'
 import { Quiz } from './tabs/Quiz'
 import { Research } from './tabs/Research'
 import { Notebook } from './tabs/Notebook'
+import { Projects } from './tabs/Projects'
 import { Settings } from './tabs/Settings'
-import { Placeholder } from './tabs/Placeholder'
 import { useSystemStatus } from './hooks/useSystemStatus'
 import type { TabId } from './tabs'
 import type { CourseSummary } from '../../shared/ipc'
@@ -110,14 +109,7 @@ export function App(): JSX.Element {
               onChanged={() => setNotebookVersion((v) => v + 1)}
             />
           )}
-          {tab === 'projects' && (
-            <Placeholder
-              title="Projects"
-              line="Draft assignments and your capstone with the scholar framework. It coaches and proofreads — you write."
-              icon={FileText}
-              accent="#5a4ab0"
-            />
-          )}
+          {tab === 'projects' && <Projects engine={status.engine} />}
           {tab === 'settings' && <Settings status={status} />}
         </main>
       </div>

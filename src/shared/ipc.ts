@@ -46,6 +46,18 @@ export const IPC = {
   notebookUpdateSnippet: 'notebook:snippet:update',
   notebookDeleteSnippet: 'notebook:snippet:delete',
   notebookDelete: 'notebook:delete',
+  /** Projects: the assignment/capstone/personal scaffold (no-write coaching). */
+  projectsOverview: 'projects:overview',
+  projectOpen: 'projects:open',
+  projectCreatePersonal: 'projects:createPersonal',
+  projectUpdate: 'projects:update',
+  projectAddEvidence: 'projects:evidence:add',
+  projectRemoveEvidence: 'projects:evidence:remove',
+  projectDelete: 'projects:delete',
+  projectCoach: 'projects:coach',
+  /** Persisted app settings (onboarding flag, engine choice, metrics opt-in). */
+  settingsGet: 'settings:get',
+  settingsSet: 'settings:set',
   /** List saved conversation threads for a tab (Recents). */
   threadsList: 'threads:list',
   /** Load a full thread with its turns. */
@@ -297,6 +309,65 @@ export type AddSnippetRequest = {
   sources: NoteSource[]
   from: string
 }
+
+// ── projects (no-write scaffold: assignments · capstone · personal) ────────
+export type ProjectKind = 'assignment' | 'capstone' | 'personal'
+
+// Bardach's 8-step policy analysis, each carrying a Takshashila India lens hint.
+// Static UI + prompt content shared by main (coach prompts) and renderer.
+export const BARDACH_STEPS = [
+  { key: 'define', title: 'Define the problem', lens: 'Is this a state-capacity problem?' },
+  { key: 'evidence', title: 'Assemble evidence', lens: 'What does the data actually say?' },
+  { key: 'alternatives', title: 'Construct alternatives', lens: 'Union / State / Concurrent?' },
+  { key: 'criteria', title: 'Select criteria', lens: 'Better-or-worse, not good-or-bad' },
+  { key: 'outcomes', title: 'Project the outcomes', lens: 'All sectors can fail' },
+  { key: 'tradeoffs', title: 'Confront the trade-offs', lens: 'Who bears the cost?' },
+  { key: 'decide', title: 'Decide', lens: 'Defensible on the evidence?' },
+  { key: 'story', title: 'Tell your story', lens: 'Clear to a non-expert?' }
+] as const
+
+export type ProjectEvidence = { id: string; title: string; note: string; sources: NoteSource[]; pageId: string | null }
+
+export type Project = {
+  id: string
+  kind: ProjectKind
+  title: string
+  courseCode: string | null
+  courseName: string | null
+  dueAt: string | null
+  brief: string // the assignment prompt / description
+  deliverable: string // e.g. "2-minute video explainer"
+  draft: string // the student's own script/notes (never AI-written)
+  step: number // active Bardach step index
+  done: number[] // completed step indices
+  evidence: ProjectEvidence[]
+  createdAt: string
+  updatedAt: string
+}
+
+export type ProjectListItem = {
+  id: string
+  kind: ProjectKind
+  title: string
+  courseCode: string | null
+  courseName: string | null
+  dueAt: string | null
+  deliverable: string
+  started: boolean
+  progress: number // 0..1 across the 8 steps
+  updatedAt: string | null
+}
+
+export type ProjectsOverview = {
+  assignments: ProjectListItem[]
+  capstone: ProjectListItem | null
+  personal: ProjectListItem[]
+}
+
+export type CoachAction = 'brainstorm' | 'evidence' | 'stakeholders' | 'proofread' | 'review'
+export type CoachResult = { action: CoachAction; title: string; markdown: string; blocked?: boolean }
+
+export type AppSettings = { onboarded: boolean; engineChoice: string | null; metrics: boolean }
 
 /** Either a generated image (dataUrl) or a reason it couldn't be made. */
 export type IllustrationImage = {

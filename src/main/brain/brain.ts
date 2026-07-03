@@ -5,6 +5,8 @@ import type {
   NoteSnippet,
   NotebookPage,
   NotebookPageSummary,
+  Project,
+  ProjectEvidence,
   QuizAttempt,
   Thread,
   ThreadAnswer,
@@ -446,6 +448,99 @@ export class Brain {
 
   async deleteNotebookPage(id: string): Promise<void> {
     await this.db.query(`DELETE FROM notebook_pages WHERE id = $1`, [id])
+  }
+
+  // ── projects (private; never uploaded) ──────────────────────────────────
+
+  private rowToProject(p: {
+    id: string
+    kind: string
+    title: string
+    course_code: string | null
+    course_name: string | null
+    due_at: string | null
+    brief: string
+    deliverable: string
+    draft: string
+    step: number
+    done: unknown
+    evidence: unknown
+    created_at: string
+    updated_at: string
+  }): Project {
+    const parse = <T>(v: unknown, fallback: T): T => {
+      const val = typeof v === 'string' ? JSON.parse(v) : v
+      return (val ?? fallback) as T
+    }
+    return {
+      id: p.id,
+      kind: p.kind as Project['kind'],
+      title: p.title,
+      courseCode: p.course_code,
+      courseName: p.course_name,
+      dueAt: p.due_at ? String(p.due_at) : null,
+      brief: p.brief,
+      deliverable: p.deliverable,
+      draft: p.draft,
+      step: Number(p.step),
+      done: parse<number[]>(p.done, []),
+      evidence: parse<ProjectEvidence[]>(p.evidence, []),
+      createdAt: String(p.created_at),
+      updatedAt: String(p.updated_at)
+    }
+  }
+
+  async listProjects(): Promise<Project[]> {
+    const r = await this.db.query(`SELECT * FROM projects ORDER BY updated_at DESC`)
+    return (r.rows as Parameters<typeof this.rowToProject>[0][]).map((row) => this.rowToProject(row))
+  }
+
+  async getProject(id: string): Promise<Project | null> {
+    const r = await this.db.query(`SELECT * FROM projects WHERE id = $1`, [id])
+    const row = r.rows[0] as Parameters<typeof this.rowToProject>[0] | undefined
+    return row ? this.rowToProject(row) : null
+  }
+
+  async createProject(p: {
+    id: string
+    kind: string
+    title: string
+    courseCode: string | null
+    courseName: string | null
+    dueAt: string | null
+    brief: string
+    deliverable: string
+  }): Promise<Project> {
+    await this.db.query(
+      `INSERT INTO projects (id, kind, title, course_code, course_name, due_at, brief, deliverable)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8) ON CONFLICT (id) DO NOTHING`,
+      [p.id, p.kind, p.title, p.courseCode, p.courseName, p.dueAt, p.brief, p.deliverable]
+    )
+    return (await this.getProject(p.id)) as Project
+  }
+
+  async updateProject(
+    id: string,
+    patch: { title?: string; draft?: string; step?: number; done?: number[]; evidence?: ProjectEvidence[] }
+  ): Promise<Project | null> {
+    const cur = await this.getProject(id)
+    if (!cur) return null
+    const next = {
+      title: patch.title ?? cur.title,
+      draft: patch.draft ?? cur.draft,
+      step: patch.step ?? cur.step,
+      done: patch.done ?? cur.done,
+      evidence: patch.evidence ?? cur.evidence
+    }
+    await this.db.query(
+      `UPDATE projects SET title=$2, draft=$3, step=$4, done=$5, evidence=$6, updated_at=now() WHERE id=$1`,
+      [id, next.title, next.draft, next.step, JSON.stringify(next.done), JSON.stringify(next.evidence)]
+    )
+    return this.getProject(id)
+  }
+
+  async deleteProject(id: string): Promise<void> {
+    await this.db.query(`DELETE FROM projects WHERE id = $1`, [id])
   }
 
   // ── conversation threads (private; never uploaded) ──────────────────────

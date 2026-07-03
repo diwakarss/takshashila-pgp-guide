@@ -3,15 +3,19 @@ import { join } from 'path'
 import { copyFileSync, mkdirSync, writeFileSync } from 'node:fs'
 import { IPC, type AppInfo } from '../shared/ipc'
 import { studyBrain } from './services/studyBrain'
+import { getSettings, setSettings } from './services/settings'
 import { agentCliEngine } from './engine/agentCli'
 import { imageEngine } from './illustrate/imageEngine'
 import { extractConcepts } from './illustrate/extract'
 import type {
   AddSnippetRequest,
+  AppSettings,
   AskRequest,
+  CoachAction,
   IllustrationImage,
   IllustrationSpec,
   LensRequest,
+  NoteSource,
   QuizResult,
   QuizSpec,
   ResearchRequest
@@ -181,6 +185,30 @@ function registerIpc(): void {
     studyBrain.deleteSnippet(req.pageId, req.snippetId)
   )
   ipcMain.handle(IPC.notebookDelete, (_e, id: string) => studyBrain.deleteNotebookPage(id))
+
+  ipcMain.handle(IPC.projectsOverview, () => studyBrain.projectsOverview())
+  ipcMain.handle(IPC.projectOpen, (_e, id: string) => studyBrain.openProject(id))
+  ipcMain.handle(IPC.projectCreatePersonal, (_e, title: string) => studyBrain.createPersonalProject(title))
+  ipcMain.handle(
+    IPC.projectUpdate,
+    (_e, req: { id: string; patch: { title?: string; draft?: string; step?: number; done?: number[] } }) =>
+      studyBrain.updateProject(req.id, req.patch)
+  )
+  ipcMain.handle(
+    IPC.projectAddEvidence,
+    (_e, req: { id: string; evidence: { title: string; note: string; sources: NoteSource[]; pageId: string | null } }) =>
+      studyBrain.addProjectEvidence(req.id, req.evidence)
+  )
+  ipcMain.handle(IPC.projectRemoveEvidence, (_e, req: { id: string; evidenceId: string }) =>
+    studyBrain.removeProjectEvidence(req.id, req.evidenceId)
+  )
+  ipcMain.handle(IPC.projectDelete, (_e, id: string) => studyBrain.deleteProject(id))
+  ipcMain.handle(IPC.projectCoach, (_e, req: { id: string; action: CoachAction }) =>
+    studyBrain.projectCoach(req.id, req.action)
+  )
+
+  ipcMain.handle(IPC.settingsGet, () => getSettings())
+  ipcMain.handle(IPC.settingsSet, (_e, patch: Partial<AppSettings>) => setSettings(patch))
   ipcMain.handle(IPC.threadsList, (_e, tab?: string) => studyBrain.listThreads(tab))
   ipcMain.handle(IPC.threadGet, (_e, id: string) => studyBrain.getThread(id))
   ipcMain.handle(IPC.threadDelete, (_e, id: string) => studyBrain.deleteThread(id))
@@ -239,6 +267,25 @@ app.whenReady().then(() => {
       if (p) await studyBrain.deleteNotebookPage(p.id)
       console.log(`[nb] cleaned up → ${(await studyBrain.listNotebook()).length} pages`)
     })().catch((e) => console.error('[nb] failed:', e))
+  }
+
+  // Verify the projects scaffold end-to-end (self-cleaning; coach optional).
+  if (process.env['PGP_DEV_PROJECTS']) {
+    void (async () => {
+      const ov = await studyBrain.projectsOverview()
+      console.log('[proj] overview:', JSON.stringify({ assignments: ov.assignments.map((a) => a.title), capstone: ov.capstone?.title, personal: ov.personal.length }))
+      const p = await studyBrain.openProject('pp231-iran-demand-supply')
+      console.log(`[proj] opened "${p?.title}" step=${p?.step} deliverable="${p?.deliverable}"`)
+      await studyBrain.updateProject(p!.id, { draft: 'Oil prices rose; demand for EVs shifted right.', step: 1, done: [0] })
+      const ov2 = await studyBrain.projectsOverview()
+      console.log('[proj] after update, assignment started/progress:', JSON.stringify(ov2.assignments.map((a) => ({ s: a.started, p: Math.round(a.progress * 100) }))))
+      if (process.env['PGP_DEV_PROJECT_COACH']) {
+        const c = await studyBrain.projectCoach(p!.id, 'brainstorm')
+        console.log(`[proj] coach ${c.title} (blocked=${c.blocked}):`, c.markdown.slice(0, 160))
+      }
+      await studyBrain.deleteProject(p!.id)
+      console.log('[proj] cleaned up')
+    })().catch((e) => console.error('[proj] failed:', e))
   }
 
   // Verify web research end-to-end: PGP_DEV_RESEARCH="a question".
