@@ -1,7 +1,7 @@
 import { PGlite } from '@electric-sql/pglite'
 import { vector } from '@electric-sql/pglite/vector'
 import { SCHEMA_SQL, EMBED_DIM } from './schema'
-import type { Thread, ThreadDetail, Turn, TutorReply } from '../../shared/ipc'
+import type { QuizAttempt, Thread, ThreadDetail, Turn, TutorReply } from '../../shared/ipc'
 
 export type Source = 'corpus' | 'private'
 
@@ -248,6 +248,51 @@ export class Brain {
       [courseCode]
     )
     return r.rows.map((x) => x.title)
+  }
+
+  // ── quiz history (private; never uploaded) ──────────────────────────────
+
+  async recordQuizAttempt(a: {
+    id: string
+    courseCode: string | null
+    courseName: string | null
+    total: number
+    correct: number
+  }): Promise<void> {
+    await this.db.query(
+      `INSERT INTO quiz_attempts (id, course_code, course_name, total, correct)
+       VALUES ($1, $2, $3, $4, $5)`,
+      [a.id, a.courseCode, a.courseName, a.total, a.correct]
+    )
+  }
+
+  /** All quiz attempts, most-recent first. Small (one row per finished quiz),
+   *  so the gamification service aggregates over the full set in memory. */
+  async listQuizAttempts(): Promise<QuizAttempt[]> {
+    const r = await this.db.query<{
+      id: string
+      course_code: string | null
+      course_name: string | null
+      total: number
+      correct: number
+      created_at: string
+    }>(
+      `SELECT id, course_code, course_name, total, correct, created_at
+         FROM quiz_attempts ORDER BY created_at DESC`
+    )
+    return r.rows.map((x) => ({
+      id: x.id,
+      courseCode: x.course_code,
+      courseName: x.course_name,
+      total: Number(x.total),
+      correct: Number(x.correct),
+      createdAt: x.created_at
+    }))
+  }
+
+  /** Wipe quiz history (dev/verification cleanup + a Settings reset later). */
+  async clearQuizAttempts(): Promise<void> {
+    await this.db.query(`DELETE FROM quiz_attempts`)
   }
 
   // ── conversation threads (private; never uploaded) ──────────────────────

@@ -376,6 +376,15 @@ h2 {
 .nav-list {
   flex: 0 0 auto;
 }
+/* Middle region — always fills the gap between the nav and the footer, so the
+   footer (status + Settings) stays pinned to the bottom on every tab. */
+.sidebar-mid {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+}
 .recents {
   flex: 1;
   min-height: 0;
@@ -383,6 +392,92 @@ h2 {
   margin-top: 12px;
   border-top: 1px solid var(--hairline);
   padding-top: 10px;
+}
+
+/* ── quiz gamification (sidebar panel) ──────────────────── */
+.qp {
+  margin-top: 12px;
+  border-top: 1px solid var(--hairline);
+  padding-top: 12px;
+}
+.qp-level {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+}
+.qp-badge {
+  flex: none;
+  width: 30px;
+  height: 30px;
+  border-radius: 999px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  font-weight: 600;
+  color: #fff;
+  background: linear-gradient(140deg, #1d8a66, #2aa17a);
+}
+.qp-level-name {
+  font-size: 13px;
+  font-weight: 500;
+}
+.qp-xp {
+  font-size: 11px;
+  color: var(--muted);
+}
+.qp-bar {
+  height: 6px;
+  border-radius: 999px;
+  background: var(--parchment);
+  overflow: hidden;
+  margin: 9px 0 8px;
+}
+.qp-bar > span {
+  display: block;
+  height: 100%;
+  border-radius: 999px;
+  background: #1d8a66;
+}
+.qp-streak {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--ink);
+  margin-bottom: 6px;
+}
+.qp-recent {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.qp-recent-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 12px;
+  padding: 3px 4px;
+}
+.qp-recent-course {
+  color: var(--muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.qp-recent-score {
+  font-variant-numeric: tabular-nums;
+  font-weight: 500;
+}
+.qp-recent-score.good {
+  color: var(--success);
+}
+.qp-recent-score.ok {
+  color: var(--warning);
+}
+.qp-recent-score.low {
+  color: var(--danger);
 }
 .new-conv {
   display: flex;
@@ -527,16 +622,164 @@ h2 {
   max-width: 720px;
   margin: 0 auto;
 }
+.quiz-setup {
+  max-width: 760px;
+}
 .quiz-setup-row {
   display: flex;
   gap: 28px;
   flex-wrap: wrap;
-  align-items: flex-start;
+  align-items: flex-end;
   margin-bottom: 16px;
+}
+/* In the setup card, stack the Course label above a full-width select so it
+   lines up with the Questions block instead of trailing off to one side. */
+.quiz-setup-row .course-select {
+  flex: 1 1 260px;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 6px;
+}
+.quiz-setup-row .course-select select {
+  max-width: none;
+  width: 100%;
 }
 .quiz-len .course-select-label {
   display: block;
   margin-bottom: 6px;
+}
+
+/* ── quiz: stat tiles + history (setup screen) ──────────── */
+.stat-tiles {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 12px;
+  margin-bottom: 18px;
+}
+.stat-tile {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: var(--surface);
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius-card);
+  padding: 14px 16px;
+}
+.stat-icon.level {
+  flex: none;
+  width: 38px;
+  height: 38px;
+  border-radius: 999px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 17px;
+  font-weight: 600;
+  color: #fff;
+  background: linear-gradient(140deg, #1d8a66, #2aa17a);
+}
+.stat-body {
+  min-width: 0;
+  flex: 1;
+}
+.stat-value {
+  font-size: 18px;
+  font-weight: 600;
+  line-height: 1.1;
+  font-variant-numeric: tabular-nums;
+}
+.stat-label {
+  font-size: 12px;
+  color: var(--muted);
+  margin-top: 2px;
+}
+.stat-bar {
+  height: 6px;
+  border-radius: 999px;
+  background: var(--parchment);
+  overflow: hidden;
+  margin: 6px 0 4px;
+}
+.stat-bar > span {
+  display: block;
+  height: 100%;
+  border-radius: 999px;
+  background: #1d8a66;
+}
+.quiz-history {
+  margin-top: 20px;
+}
+.history-list {
+  list-style: none;
+  margin: 6px 0 0;
+  padding: 0;
+}
+.history-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 9px 12px;
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius-control);
+  margin-bottom: 6px;
+  background: var(--surface);
+}
+.history-course {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.history-date {
+  font-size: 12px;
+  color: var(--muted);
+}
+.history-score {
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+.history-score.good {
+  color: var(--success);
+}
+.history-score.ok {
+  color: var(--warning);
+}
+.history-score.low {
+  color: var(--danger);
+}
+
+/* ── quiz: rewards on the done screen ───────────────────── */
+.quiz-rewards {
+  margin: 14px 0 4px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  align-items: center;
+}
+.reward-row {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+.reward {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 13px;
+  font-weight: 500;
+  padding: 5px 12px;
+  border-radius: 999px;
+  background: var(--parchment);
+}
+.reward.xp {
+  color: #1d8a66;
+  background: color-mix(in srgb, #1d8a66 10%, transparent);
+}
+.reward.levelup {
+  color: #b5781a;
+  background: color-mix(in srgb, #c99a2e 16%, transparent);
 }
 .len-chips {
   display: flex;

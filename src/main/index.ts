@@ -6,7 +6,7 @@ import { studyBrain } from './services/studyBrain'
 import { agentCliEngine } from './engine/agentCli'
 import { imageEngine } from './illustrate/imageEngine'
 import { extractConcepts } from './illustrate/extract'
-import type { AskRequest, IllustrationImage, IllustrationSpec, QuizSpec } from '../shared/ipc'
+import type { AskRequest, IllustrationImage, IllustrationSpec, QuizResult, QuizSpec } from '../shared/ipc'
 
 // Builder batch: pre-generate the illustration library for the real courses.
 // PGP_DEV_BUILD_LIBRARY=1 (PGP_DEV_CLEAR_LIBRARY=1 to wipe first after a style
@@ -162,6 +162,8 @@ function registerIpc(): void {
   ipcMain.handle(IPC.quizIllustration, (_e, req: { concept: string; courseCode?: string }) =>
     studyBrain.reuseIllustration(req.concept, req.courseCode)
   )
+  ipcMain.handle(IPC.quizRecord, (_e, result: QuizResult) => studyBrain.recordQuiz(result))
+  ipcMain.handle(IPC.quizStats, () => studyBrain.quizStats())
 
   ipcMain.handle(IPC.illustrationAvailable, () => studyBrain.imageGenEnabled() && imageEngine.isAvailable())
 
@@ -182,6 +184,26 @@ app.whenReady().then(() => {
 
   if (process.env['PGP_DEV_BUILD_LIBRARY']) {
     void buildLibrary().catch((e) => console.error('[lib] build failed:', e))
+  }
+
+  // Verify the gamification path end-to-end without leaving junk: record a few
+  // attempts, read the derived stats, then wipe them.
+  if (process.env['PGP_DEV_QUIZ_STATS']) {
+    void (async () => {
+      const before = await studyBrain.quizStats()
+      console.log(`[stats] starting from ${before.totalQuizzes} attempts (leaving those intact would be wrong to seed)`)
+      await studyBrain.recordQuiz({ courseCode: 'PP231', courseName: 'Microeconomics-I', total: 8, correct: 6.5 })
+      await studyBrain.recordQuiz({ courseCode: 'PP231', courseName: 'Microeconomics-I', total: 5, correct: 5 })
+      const s = await studyBrain.recordQuiz({ courseCode: 'PP221', courseName: 'Public Policy', total: 10, correct: 4 })
+      console.log(
+        `[stats] level=${s.level} xp=${s.xp} (${s.levelXp}/${s.levelSpan}) streak=${s.streakDays} best=${s.bestStreak} ` +
+          `quizzes=${s.totalQuizzes} acc=${Math.round(s.accuracy * 100)}%`
+      )
+      console.log('[stats] byCourse:', JSON.stringify(s.byCourse.map((c) => ({ c: c.courseCode, n: c.quizzes, acc: Math.round(c.accuracy * 100) }))))
+      console.log('[stats] recent:', JSON.stringify(s.recent.map((a) => `${a.courseCode} ${a.correct}/${a.total}`)))
+      await studyBrain.clearQuizHistory()
+      console.log(`[stats] cleaned up → ${(await studyBrain.quizStats()).totalQuizzes} attempts`)
+    })().catch((e) => console.error('[stats] failed:', e))
   }
 
   // Simulate the student path: wipe the library, reload it from the shipped

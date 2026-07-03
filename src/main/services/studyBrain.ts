@@ -10,16 +10,20 @@ import { imageEngine } from '../illustrate/imageEngine'
 import { agentCliEngine } from '../engine/agentCli'
 import { runTutor, summariseReply, type TurnContext } from './tutor'
 import { generateQuiz, gradeFreeform } from './quiz'
+import { xpForAttempt, levelFromXp, currentStreak, bestStreak, dayKey } from './gamify'
 import type {
   AskRequest,
   AskResult,
   BrainStats,
   CorpusStatus,
+  CourseAccuracy,
   CourseSummary,
   IllustrationImage,
   IllustrationSpec,
   QuizQuestion,
+  QuizResult,
   QuizSpec,
+  QuizStats,
   QuizVerdict,
   SearchHit,
   Thread,
@@ -186,6 +190,77 @@ class StudyBrainService {
 
   async gradeQuizAnswer(question: { prompt: string; modelAnswer: string }, answer: string): Promise<QuizVerdict> {
     return gradeFreeform(question, answer, agentCliEngine)
+  }
+
+  /** Record a finished quiz and return the freshly-updated stats (so the UI can
+   *  show XP earned / level / streak on the results screen in one round-trip). */
+  async recordQuiz(result: QuizResult): Promise<QuizStats> {
+    const brain = await this.open()
+    await brain.recordQuizAttempt({
+      id: randomUUID(),
+      courseCode: result.courseCode ?? null,
+      courseName: result.courseName ?? null,
+      total: result.total,
+      correct: result.correct
+    })
+    return this.quizStats()
+  }
+
+  /** Wipe quiz history (dev verification; a Settings "reset progress" later). */
+  async clearQuizHistory(): Promise<void> {
+    const brain = await this.open()
+    await brain.clearQuizAttempts()
+  }
+
+  /** Scoring history + XP / streak gamification, derived from the attempt log. */
+  async quizStats(): Promise<QuizStats> {
+    const brain = await this.open()
+    const attempts = await brain.listQuizAttempts()
+    const totalQuizzes = attempts.length
+    const totalQuestions = attempts.reduce((s, a) => s + a.total, 0)
+    const totalCorrect = attempts.reduce((s, a) => s + a.correct, 0)
+    const xp = attempts.reduce((s, a) => s + xpForAttempt(a.correct, a.total), 0)
+    const { level, levelXp, levelSpan } = levelFromXp(xp)
+
+    const days = attempts.map((a) => dayKey(new Date(a.createdAt)))
+    const today = dayKey(new Date())
+
+    // Per-course rollup (accuracy weighted by questions), most-taken first.
+    const byCourseMap = new Map<string, CourseAccuracy & { correct: number; questions: number }>()
+    for (const a of attempts) {
+      const key = a.courseCode ?? '∅'
+      const cur =
+        byCourseMap.get(key) ??
+        { courseCode: a.courseCode, courseName: a.courseName, quizzes: 0, accuracy: 0, correct: 0, questions: 0 }
+      cur.quizzes += 1
+      cur.correct += a.correct
+      cur.questions += a.total
+      if (!cur.courseName && a.courseName) cur.courseName = a.courseName
+      byCourseMap.set(key, cur)
+    }
+    const byCourse: CourseAccuracy[] = [...byCourseMap.values()]
+      .map((c) => ({
+        courseCode: c.courseCode,
+        courseName: c.courseName,
+        quizzes: c.quizzes,
+        accuracy: c.questions > 0 ? c.correct / c.questions : 0
+      }))
+      .sort((a, b) => b.quizzes - a.quizzes)
+
+    return {
+      totalQuizzes,
+      totalQuestions,
+      totalCorrect,
+      accuracy: totalQuestions > 0 ? totalCorrect / totalQuestions : 0,
+      xp,
+      level,
+      levelXp,
+      levelSpan,
+      streakDays: currentStreak(days, today),
+      bestStreak: bestStreak(days),
+      recent: attempts.slice(0, 8),
+      byCourse
+    }
   }
 
   /**

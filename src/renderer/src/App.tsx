@@ -17,6 +17,7 @@ export function App(): JSX.Element {
   const status = useSystemStatus()
   const [openThreadId, setOpenThreadId] = useState<string | null>(null)
   const [threadsVersion, setThreadsVersion] = useState(0)
+  const [quizStatsVersion, setQuizStatsVersion] = useState(0)
   const [courses, setCourses] = useState<CourseSummary[]>([])
   const [course, setCourse] = useState<string>('')
 
@@ -46,6 +47,7 @@ export function App(): JSX.Element {
         stats={status.stats}
         openThreadId={openThreadId}
         threadsVersion={threadsVersion}
+        quizStatsVersion={quizStatsVersion}
         onOpenThread={openThread}
       />
       <div className="main-col">
@@ -69,6 +71,8 @@ export function App(): JSX.Element {
               ready={status.ready}
               engine={status.engine}
               courses={courses}
+              statsVersion={quizStatsVersion}
+              onRecorded={() => setQuizStatsVersion((v) => v + 1)}
               onGoToSettings={() => setTab('settings')}
             />
           )}

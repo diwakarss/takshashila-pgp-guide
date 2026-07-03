@@ -1,10 +1,11 @@
 import { useEffect, useState } from 'react'
-import { Settings as SettingsIcon, Plus, PanelLeftClose, PanelLeft } from 'lucide-react'
+import { Settings as SettingsIcon, Plus, PanelLeftClose, PanelLeft, Flame } from 'lucide-react'
 import { NAV_TABS, type TabId } from '../tabs'
-import type { BrainStats, EngineStatus, Thread } from '../../../shared/ipc'
+import type { BrainStats, EngineStatus, QuizStats, Thread } from '../../../shared/ipc'
 
 // The persistent shell (design D3): nav tabs, then — for the active tab — a
-// Recents list of saved conversations (Claude-style), collapsible.
+// middle panel (Recents for Tutor, gamification for Quiz), then a footer that
+// stays pinned to the bottom on EVERY tab (status pills + Settings).
 export function Sidebar(props: {
   active: TabId
   onNavigate: (t: TabId) => void
@@ -12,17 +13,24 @@ export function Sidebar(props: {
   stats: BrainStats | null
   openThreadId: string | null
   threadsVersion: number
+  quizStatsVersion: number
   onOpenThread: (id: string | null) => void
 }): JSX.Element {
-  const { active, onNavigate, engine, stats, openThreadId, threadsVersion, onOpenThread } = props
+  const { active, onNavigate, engine, stats, openThreadId, threadsVersion, quizStatsVersion, onOpenThread } = props
   const [collapsed, setCollapsed] = useState(false)
   const [threads, setThreads] = useState<Thread[]>([])
+  const [quiz, setQuiz] = useState<QuizStats | null>(null)
 
-  // Recents currently exist for Tutor; the same pattern serves Research later.
   const showRecents = active === 'tutor'
+  const showQuiz = active === 'quiz'
+
   useEffect(() => {
     if (showRecents) void window.pgp.listThreads('tutor').then(setThreads)
   }, [showRecents, threadsVersion])
+
+  useEffect(() => {
+    if (showQuiz) void window.pgp.quizStats().then(setQuiz)
+  }, [showQuiz, quizStatsVersion])
 
   return (
     <nav className={`sidebar${collapsed ? ' collapsed' : ''}`} aria-label="Main">
@@ -54,28 +62,33 @@ export function Sidebar(props: {
         })}
       </ul>
 
-      {showRecents && !collapsed && (
-        <div className="recents">
-          <button className="new-conv" onClick={() => onOpenThread(null)}>
-            <Plus size={15} /> New conversation
-          </button>
-          <div className="recents-label">Recents</div>
-          <ul className="recents-list">
-            {threads.length === 0 && <li className="recents-empty">No conversations yet</li>}
-            {threads.map((t) => (
-              <li key={t.id}>
-                <button
-                  className={`recent-item${openThreadId === t.id ? ' active' : ''}`}
-                  title={t.title}
-                  onClick={() => onOpenThread(t.id)}
-                >
-                  {t.title}
-                </button>
-              </li>
-            ))}
-          </ul>
-        </div>
-      )}
+      {/* Middle panel — always present (even if empty) so the footer stays pinned. */}
+      <div className="sidebar-mid">
+        {showRecents && !collapsed && (
+          <div className="recents">
+            <button className="new-conv" onClick={() => onOpenThread(null)}>
+              <Plus size={15} /> New conversation
+            </button>
+            <div className="recents-label">Recents</div>
+            <ul className="recents-list">
+              {threads.length === 0 && <li className="recents-empty">No conversations yet</li>}
+              {threads.map((t) => (
+                <li key={t.id}>
+                  <button
+                    className={`recent-item${openThreadId === t.id ? ' active' : ''}`}
+                    title={t.title}
+                    onClick={() => onOpenThread(t.id)}
+                  >
+                    {t.title}
+                  </button>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+
+        {showQuiz && !collapsed && <QuizSidePanel stats={quiz} />}
+      </div>
 
       <div className="sidebar-foot">
         {!collapsed && (
@@ -101,5 +114,46 @@ export function Sidebar(props: {
         </button>
       </div>
     </nav>
+  )
+}
+
+// Compact gamification for the Quiz tab: level + XP bar, streak, recent scores.
+function QuizSidePanel({ stats }: { stats: QuizStats | null }): JSX.Element {
+  if (!stats) return <div className="qp" />
+  const pct = stats.levelSpan > 0 ? Math.round((stats.levelXp / stats.levelSpan) * 100) : 0
+  return (
+    <div className="qp">
+      <div className="qp-level">
+        <span className="qp-badge">{stats.level}</span>
+        <div className="qp-level-txt">
+          <div className="qp-level-name">Level {stats.level}</div>
+          <div className="qp-xp">{stats.xp} XP</div>
+        </div>
+      </div>
+      <div className="qp-bar" title={`${stats.levelXp} / ${stats.levelSpan} XP to next level`}>
+        <span style={{ width: `${pct}%` }} />
+      </div>
+      <div className="qp-streak" title="Consecutive days with a quiz">
+        <Flame size={14} strokeWidth={2} style={{ color: stats.streakDays > 0 ? '#e07a3c' : 'var(--muted)' }} />
+        {stats.streakDays > 0 ? `${stats.streakDays}-day streak` : 'No streak yet'}
+      </div>
+
+      <div className="recents-label">Recent scores</div>
+      <ul className="qp-recent">
+        {stats.recent.length === 0 && <li className="recents-empty">No quizzes yet</li>}
+        {stats.recent.map((a) => {
+          const p = a.total > 0 ? a.correct / a.total : 0
+          const grade = p >= 0.8 ? 'good' : p >= 0.5 ? 'ok' : 'low'
+          return (
+            <li key={a.id} className="qp-recent-item">
+              <span className="qp-recent-course">{a.courseCode ?? 'Mixed'}</span>
+              <span className={`qp-recent-score ${grade}`}>
+                {a.correct % 1 === 0 ? a.correct : a.correct.toFixed(1)}/{a.total}
+              </span>
+            </li>
+          )
+        })}
+      </ul>
+    </div>
   )
 }

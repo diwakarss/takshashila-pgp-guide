@@ -74,6 +74,19 @@ CREATE TABLE IF NOT EXISTS turns (
 CREATE INDEX IF NOT EXISTS turns_thread_idx  ON turns (thread_id, ordinal);
 CREATE INDEX IF NOT EXISTS threads_tab_idx   ON threads (tab, updated_at DESC);
 
+-- Quiz history: one row per completed quiz. Feeds scoring history + the XP /
+-- streak gamification. Private, never uploaded. correct counts partial
+-- free-form answers as 0.5, so it can be fractional.
+CREATE TABLE IF NOT EXISTS quiz_attempts (
+  id          TEXT PRIMARY KEY,
+  course_code TEXT,
+  course_name TEXT,
+  total       INT  NOT NULL,
+  correct     REAL NOT NULL,
+  created_at  TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS quiz_attempts_time_idx ON quiz_attempts (created_at DESC);
+
 -- Illustration library: one row per drawn concept. Matched by embedding so a
 -- concept is drawn ONCE and reused across questions/phrasings (no per-answer
 -- regeneration). Ships with the corpus so students get illustrations for free.

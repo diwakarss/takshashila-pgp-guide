@@ -1,6 +1,13 @@
 import { useEffect, useState } from 'react'
-import { CheckSquare, Check, X, RotateCcw } from 'lucide-react'
-import type { CourseSummary, EngineStatus, IllustrationImage, QuizQuestion, QuizVerdict } from '../../../shared/ipc'
+import { CheckSquare, Check, X, RotateCcw, Flame, Trophy, Target, Sparkles } from 'lucide-react'
+import type {
+  CourseSummary,
+  EngineStatus,
+  IllustrationImage,
+  QuizQuestion,
+  QuizStats,
+  QuizVerdict
+} from '../../../shared/ipc'
 
 type Result = { correct: boolean; verdict?: QuizVerdict }
 
@@ -15,9 +22,11 @@ export function Quiz(props: {
   ready: boolean
   engine: EngineStatus | null
   courses: CourseSummary[]
+  statsVersion: number
+  onRecorded: () => void
   onGoToSettings: () => void
 }): JSX.Element {
-  const { ready, engine, courses, onGoToSettings } = props
+  const { ready, engine, courses, statsVersion, onRecorded, onGoToSettings } = props
   const [phase, setPhase] = useState<'setup' | 'taking' | 'done'>('setup')
   const [course, setCourse] = useState('')
   const [count, setCount] = useState(8)
@@ -33,6 +42,13 @@ export function Quiz(props: {
   const [grading, setGrading] = useState(false)
   const [illus, setIllus] = useState<IllustrationImage | null>(null)
   const [results, setResults] = useState<Result[]>([])
+  const [stats, setStats] = useState<QuizStats | null>(null) // pre-quiz stats, shown on setup
+  const [earned, setEarned] = useState<{ xp: number; leveledUp: boolean; stats: QuizStats } | null>(null)
+
+  // Refresh scoring history whenever we return to setup (or another surface records).
+  useEffect(() => {
+    if (phase === 'setup') void window.pgp.quizStats().then(setStats)
+  }, [phase, statsVersion])
 
   const engineReady = engine?.available ?? false
   const q = questions[idx]
@@ -63,6 +79,7 @@ export function Quiz(props: {
   const start = async (): Promise<void> => {
     setBusy(true)
     setError(null)
+    setEarned(null)
     try {
       const qs = await window.pgp.generateQuiz({ courseCode: course || undefined, count })
       if (qs.length === 0) {
@@ -110,16 +127,34 @@ export function Quiz(props: {
     }
   }
 
+  const score = results.reduce((s, r) => s + (r.correct ? 1 : r.verdict?.verdict === 'partial' ? 0.5 : 0), 0)
+
+  const finish = async (): Promise<void> => {
+    setPhase('done')
+    try {
+      const before = stats
+      const updated = await window.pgp.recordQuiz({
+        courseCode: course || undefined,
+        courseName: courses.find((c) => c.code === course)?.name,
+        total: questions.length,
+        correct: score
+      })
+      setEarned({ xp: updated.xp - (before?.xp ?? 0), leveledUp: before ? updated.level > before.level : false, stats: updated })
+      setStats(updated)
+      onRecorded()
+    } catch {
+      /* keep the local score even if persistence fails */
+    }
+  }
+
   const next = (): void => {
     if (idx + 1 >= questions.length) {
-      setPhase('done')
+      void finish()
       return
     }
     setIdx((i) => i + 1)
     resetQuestion()
   }
-
-  const score = results.reduce((s, r) => s + (r.correct ? 1 : r.verdict?.verdict === 'partial' ? 0.5 : 0), 0)
 
   if (!ready) {
     return (
@@ -136,12 +171,50 @@ export function Quiz(props: {
 
   // ── setup ───────────────────────────────────────────────
   if (phase === 'setup') {
+    const pct = stats && stats.levelSpan > 0 ? Math.round((stats.levelXp / stats.levelSpan) * 100) : 0
     return (
-      <div className="surface">
+      <div className="surface quiz-setup">
         <header className="surface-head">
           <h1>Quiz</h1>
           <p className="muted">Test yourself — questions are drawn from your lessons and graded against them.</p>
         </header>
+
+        {stats && (
+          <section className="stat-tiles">
+            <div className="stat-tile">
+              <div className="stat-icon level">{stats.level}</div>
+              <div className="stat-body">
+                <div className="stat-value">Level {stats.level}</div>
+                <div className="stat-bar" title={`${stats.levelXp} / ${stats.levelSpan} XP`}>
+                  <span style={{ width: `${pct}%` }} />
+                </div>
+                <div className="stat-label">{stats.xp} XP total</div>
+              </div>
+            </div>
+            <div className="stat-tile">
+              <Flame size={22} strokeWidth={1.75} style={{ color: stats.streakDays > 0 ? '#e07a3c' : 'var(--muted)' }} />
+              <div className="stat-body">
+                <div className="stat-value">{stats.streakDays}</div>
+                <div className="stat-label">day streak{stats.bestStreak > 1 ? ` · best ${stats.bestStreak}` : ''}</div>
+              </div>
+            </div>
+            <div className="stat-tile">
+              <Trophy size={22} strokeWidth={1.75} style={{ color: '#c99a2e' }} />
+              <div className="stat-body">
+                <div className="stat-value">{stats.totalQuizzes}</div>
+                <div className="stat-label">quizzes taken</div>
+              </div>
+            </div>
+            <div className="stat-tile">
+              <Target size={22} strokeWidth={1.75} style={{ color: '#1d8a66' }} />
+              <div className="stat-body">
+                <div className="stat-value">{stats.totalQuestions > 0 ? `${Math.round(stats.accuracy * 100)}%` : '—'}</div>
+                <div className="stat-label">accuracy</div>
+              </div>
+            </div>
+          </section>
+        )}
+
         <section className="card">
           <div className="quiz-setup-row">
             <label className="course-select">
@@ -173,6 +246,27 @@ export function Quiz(props: {
           </button>
           {error && <p className="banner danger">{error}</p>}
         </section>
+
+        {stats && stats.recent.length > 0 && (
+          <section className="quiz-history">
+            <div className="recents-label">Recent quizzes</div>
+            <ul className="history-list">
+              {stats.recent.map((a) => {
+                const p = a.total > 0 ? a.correct / a.total : 0
+                const grade = p >= 0.8 ? 'good' : p >= 0.5 ? 'ok' : 'low'
+                return (
+                  <li key={a.id} className="history-item">
+                    <span className="history-course">{a.courseName ?? a.courseCode ?? 'Mixed'}</span>
+                    <span className="history-date">{new Date(a.createdAt).toLocaleDateString()}</span>
+                    <span className={`history-score ${grade}`}>
+                      {a.correct % 1 === 0 ? a.correct : a.correct.toFixed(1)}/{a.total}
+                    </span>
+                  </li>
+                )
+              })}
+            </ul>
+          </section>
+        )}
       </div>
     )
   }
@@ -190,6 +284,25 @@ export function Quiz(props: {
           <p className="muted">
             {pct}% — {pct >= 80 ? 'strong recall!' : pct >= 50 ? 'solid, keep at it.' : 'worth another pass.'}
           </p>
+
+          {earned && (
+            <div className="quiz-rewards">
+              {earned.leveledUp && (
+                <div className="reward levelup">
+                  <Sparkles size={16} /> Level up! You’re now level {earned.stats.level}
+                </div>
+              )}
+              <div className="reward-row">
+                <span className="reward xp">
+                  <Sparkles size={14} /> +{earned.xp} XP
+                </span>
+                <span className="reward streak">
+                  <Flame size={14} style={{ color: '#e07a3c' }} /> {earned.stats.streakDays}-day streak
+                </span>
+              </div>
+            </div>
+          )}
+
           <button className="btn primary" onClick={() => setPhase('setup')}>
             <RotateCcw size={16} /> New quiz
           </button>

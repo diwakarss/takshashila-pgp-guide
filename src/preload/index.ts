@@ -13,7 +13,9 @@ import {
   type ImportProgress,
   type ImportResult,
   type QuizQuestion,
+  type QuizResult,
   type QuizSpec,
+  type QuizStats,
   type QuizVerdict,
   type SearchHit,
   type Thread,
@@ -42,6 +44,8 @@ const api = {
     ipcRenderer.invoke(IPC.quizGrade, { question, answer }),
   quizIllustration: (concept: string, courseCode?: string): Promise<IllustrationImage> =>
     ipcRenderer.invoke(IPC.quizIllustration, { concept, courseCode }),
+  recordQuiz: (result: QuizResult): Promise<QuizStats> => ipcRenderer.invoke(IPC.quizRecord, result),
+  quizStats: (): Promise<QuizStats> => ipcRenderer.invoke(IPC.quizStats),
   illustrationAvailable: (): Promise<boolean> => ipcRenderer.invoke(IPC.illustrationAvailable),
   generateIllustration: (spec: IllustrationSpec, courseCode?: string): Promise<IllustrationImage> =>
     ipcRenderer.invoke(IPC.illustrationGenerate, { spec, courseCode }),

@@ -41,6 +41,10 @@ export const IPC = {
   quizGrade: 'quiz:grade',
   /** Reuse-only: fetch an existing library illustration for a quiz concept (never generates). */
   quizIllustration: 'quiz:illustration',
+  /** Record a completed quiz (score + course) into history; returns updated stats. */
+  quizRecord: 'quiz:record',
+  /** Scoring history + XP / streak gamification stats. */
+  quizStats: 'quiz:stats',
   /** Is on-demand illustration generation available on this machine? */
   illustrationAvailable: 'illustration:available',
   /** Generate (or return cached) one illustration; resolves to a data URL or an error reason. */
@@ -158,6 +162,36 @@ export type QuizQuestion = {
 export type QuizSpec = { courseCode?: string; count?: number }
 
 export type QuizVerdict = { verdict: 'correct' | 'partial' | 'incorrect'; feedback: string }
+
+// ── quiz history + gamification ───────────────────────────────────────────
+export type QuizAttempt = {
+  id: string
+  courseCode: string | null
+  courseName: string | null
+  total: number
+  correct: number // partial free-form answers count as 0.5
+  createdAt: string
+}
+
+/** What a finished quiz records. */
+export type QuizResult = { courseCode?: string; courseName?: string; total: number; correct: number }
+
+export type CourseAccuracy = { courseCode: string | null; courseName: string | null; quizzes: number; accuracy: number }
+
+export type QuizStats = {
+  totalQuizzes: number
+  totalQuestions: number
+  totalCorrect: number // sum across quizzes, partials as 0.5
+  accuracy: number // 0..1 overall
+  xp: number
+  level: number
+  levelXp: number // xp earned within the current level
+  levelSpan: number // xp needed to clear the current level
+  streakDays: number // consecutive days with at least one quiz
+  bestStreak: number
+  recent: QuizAttempt[] // most-recent first
+  byCourse: CourseAccuracy[]
+}
 
 /** Either a generated image (dataUrl) or a reason it couldn't be made. */
 export type IllustrationImage = {
