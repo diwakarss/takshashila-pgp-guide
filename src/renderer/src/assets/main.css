@@ -1097,6 +1097,8 @@ body.resizing-x {
 .illustration img {
   display: block;
   width: 100%;
+  max-width: 440px; /* 1536x1024 renders ~440x293 — an inset, not a poster */
+  margin: 0 auto;
   border: 1px solid var(--hairline);
   border-radius: var(--radius-card);
   background: #fff;
