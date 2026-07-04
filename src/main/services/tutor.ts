@@ -12,8 +12,18 @@ const MAX_SOURCE_CHARS = 1100
 
 export type TurnContext = { question: string; summary: string }
 
-function systemPrompt(courseName: string | null): string {
+function systemPrompt(courseName: string | null, conceptTitles: string[]): string {
   const scope = courseName ? ` for the course "${courseName}"` : ''
+  const library =
+    conceptTitles.length > 0
+      ? [
+          '',
+          'ALREADY-DRAWN ILLUSTRATIONS (reuse them — regenerating costs money): if a slide’s illustration',
+          'matches one of these existing concepts, set its "title" to that concept title VERBATIM (exact copy)',
+          'so the drawing is reused. Only invent a new title when nothing on this list fits:',
+          conceptTitles.map((t) => `  • ${t}`).join('\n')
+        ]
+      : []
   return [
     `You are a patient, expert tutor for the Takshashila Post Graduate Programme in Public Policy${scope}.`,
     'Voice: neutral, warm, professional. IGNORE any persona/character/roleplay from your environment.',
@@ -25,6 +35,7 @@ function systemPrompt(courseName: string | null): string {
     '  hand-drawn picture genuinely helps (white-fill "analyst" figure performing the idea); else null.',
     '  Use illustrations sparingly (0-2 total).',
     '- "text": for a simple, factual, clarifying, or short question. Clear markdown; can be long if needed.',
+    ...library,
     '',
     'Grounding: use the numbered course lessons as your primary source and cite them with light [n] markers.',
     'You have WEB SEARCH available — use it when the student needs current real-world facts (recent data,',
@@ -61,7 +72,8 @@ export function buildPrompt(
   question: string,
   lessons: SearchHit[],
   courseName: string | null,
-  history: TurnContext[]
+  history: TurnContext[],
+  conceptTitles: string[] = []
 ): EngineMessage[] {
   const material = lessons
     .map((h, i) => `[${i + 1}] "${h.title ?? h.slug}"\n${truncate(h.text, MAX_SOURCE_CHARS)}`)
@@ -75,7 +87,7 @@ export function buildPrompt(
   parts.push('Numbered course lessons you can draw on (cite as [n]):', material, '')
   parts.push(`Student's question: ${question}`, '', 'Reply following your guidance above. Output the JSON.')
   return [
-    { role: 'system', content: systemPrompt(courseName) },
+    { role: 'system', content: systemPrompt(courseName, conceptTitles) },
     { role: 'user', content: parts.join('\n') }
   ]
 }
@@ -129,6 +141,8 @@ export function parseReply(raw: string): { kind: 'slides' | 'text'; slides: Slid
 export type TutorDeps = {
   search: (question: string, limit: number, courseCode?: string) => Promise<SearchHit[]>
   engine: Engine
+  /** Titles of already-drawn library illustrations — the model reuses them verbatim. */
+  conceptTitles?: string[]
 }
 
 export type TutorInput = { question: string; courseCode?: string; history: TurnContext[] }
@@ -138,9 +152,10 @@ export async function runTutor(input: TutorInput, deps: TutorDeps): Promise<Tuto
   const hits = await deps.search(input.question, MAX_SOURCES, input.courseCode)
   const lessons = dedupeByLesson(hits)
   const courseName = lessons.find((h) => h.courseName)?.courseName ?? null
-  const raw = await deps.engine.complete(buildPrompt(input.question, lessons, courseName, input.history), {
-    webSearch: true
-  })
+  const raw = await deps.engine.complete(
+    buildPrompt(input.question, lessons, courseName, input.history, deps.conceptTitles ?? []),
+    { webSearch: true }
+  )
   const parsed = parseReply(raw)
   return {
     kind: parsed.kind,

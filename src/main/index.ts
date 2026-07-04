@@ -500,6 +500,29 @@ app.whenReady().then(() => {
     })().catch((e) => console.error('[kick] failed:', e))
   }
 
+  // Probe exact-title illustration reuse (run with PGP_DISABLE_IMAGE_GEN=1 in
+  // an isolated dir): seed the library from the shipped bundle, then a mangled
+  // exact title must REUSE and an unknown title must MISS without generating.
+  if (process.env['PGP_DEV_ILLUSTEST']) {
+    void (async () => {
+      const lib = await studyBrain.importLibrary()
+      console.log(`[illus] seeded ${lib.concepts} concepts / ${lib.images} images from the bundle`)
+      const hit = await studyBrain.resolveIllustration({
+        id: 't1',
+        title: 'opportunity cost — FORK, in road!', // mangled case/punct of a real title
+        composition: ''
+      })
+      console.log(`[illus] mangled exact title → ${hit.dataUrl ? `REUSED ✓ (${hit.title})` : `MISS ✗ ${hit.error}`}`)
+      const miss = await studyBrain.resolveIllustration({ id: 't2', title: 'Totally novel concept xyz', composition: '' })
+      console.log(`[illus] unknown title → ${miss.dataUrl ? 'GENERATED ✗' : `no generation ✓ (${miss.error})`}`)
+      console.log('[illus] done')
+      app.quit()
+    })().catch((e) => {
+      console.error('[illus] failed:', e)
+      app.quit()
+    })
+  }
+
   // Probe the three connect paths. PGP_DEV_AI=1|openai|anthropic-bad|ollama.
   if (process.env['PGP_DEV_AI']) {
     void (async () => {

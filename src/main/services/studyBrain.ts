@@ -203,9 +203,16 @@ class StudyBrainService {
       })
     }
 
+    // Hand the tutor the already-drawn concept titles so a matching slide
+    // reuses its illustration verbatim instead of regenerating a near-duplicate
+    // (embedding matching alone proved too fuzzy — same fix as the quiz).
+    const concepts = await brain.listConcepts()
+    const conceptTitles = concepts
+      .filter((c) => !courseCode || !c.courseCode || c.courseCode === courseCode)
+      .map((c) => c.title)
     const reply = await runTutor(
       { question: req.question, courseCode, history },
-      { search: (q, l, c) => this.search(q, l, c), engine: activeEngine() }
+      { search: (q, l, c) => this.search(q, l, c), engine: activeEngine(), conceptTitles }
     )
     const turn = await brain.appendTurn(threadId, { id: randomUUID(), question: req.question, answer: reply })
     return { threadId, turn }
@@ -599,6 +606,14 @@ class StudyBrainService {
    */
   async resolveIllustration(spec: IllustrationSpec, courseCode?: string): Promise<IllustrationImage> {
     const brain = await this.open()
+    // Exact-title reuse first (the tutor is steered to copy library titles
+    // verbatim) — deterministic and skips the embedder roundtrip entirely.
+    const norm = (s: string): string => s.toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim()
+    const exact = (await brain.listConcepts()).find((c) => norm(c.title) === norm(spec.title))
+    if (exact) {
+      const dataUrl = imageEngine.read(exact.imageFile)
+      if (dataUrl) return { id: spec.id, title: exact.title, dataUrl }
+    }
     const emb = await nomicEmbedder.embedQuery(spec.title)
     const match = await brain.matchConcept(emb, { courseCode })
     if (match) {

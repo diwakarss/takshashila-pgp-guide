@@ -36,6 +36,18 @@ describe('buildPrompt', () => {
     expect(msgs[1].content).toContain('why do bans fail?')
     expect(msgs[1].content).toContain('[1] "Micro 1"')
   })
+
+  it('lists already-drawn concept titles with a verbatim-reuse instruction', () => {
+    const msgs = buildPrompt('Explain thinking in degrees', [], 'Microeconomics-I', [], ['Policy Dial not Switch'])
+    expect(msgs[0].content).toContain('ALREADY-DRAWN ILLUSTRATIONS')
+    expect(msgs[0].content).toContain('Policy Dial not Switch')
+    expect(msgs[0].content).toContain('VERBATIM')
+  })
+
+  it('omits the library block when no concepts exist', () => {
+    const msgs = buildPrompt('q', [], null, [])
+    expect(msgs[0].content).not.toContain('ALREADY-DRAWN ILLUSTRATIONS')
+  })
 })
 
 describe('parseReply', () => {
