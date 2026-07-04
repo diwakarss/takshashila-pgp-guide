@@ -685,6 +685,10 @@ app.whenReady().then(() => {
         `(()=>{const b=[...document.querySelectorAll('.aic-method')].find(x=>/API key/.test(x.textContent));if(b)b.click()})()`
       )
       await shoot('wizard-connect-api')
+      await win.webContents.executeJavaScript(
+        `(()=>{const b=[...document.querySelectorAll('.aic-method')].find(x=>/Local/.test(x.textContent));if(b)b.click()})()`
+      )
+      await shoot('wizard-connect-local')
       console.log('[shots] done ->', dir)
     })().catch((e) => console.error('[shots] failed:', e))
   }

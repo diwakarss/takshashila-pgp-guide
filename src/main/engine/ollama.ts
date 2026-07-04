@@ -21,7 +21,10 @@ export function ollamaModel(): string {
   return getSettings().localModel ?? recommendedModel().model
 }
 
+const fakeMissing = (): boolean => (process.env['PGP_DEV_FAKE_MISSING'] ?? '').includes('ollama')
+
 export function ollamaInstalled(): boolean {
+  if (fakeMissing()) return false
   return (
     existsSync('/opt/homebrew/bin/ollama') ||
     existsSync('/usr/local/bin/ollama') ||
@@ -30,6 +33,7 @@ export function ollamaInstalled(): boolean {
 }
 
 export async function ollamaRunning(): Promise<boolean> {
+  if (fakeMissing()) return false
   try {
     const res = await fetch(`${BASE}/api/tags`, { signal: AbortSignal.timeout(2500) })
     return res.ok

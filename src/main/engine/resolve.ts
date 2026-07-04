@@ -20,6 +20,8 @@ const PROBES: Record<'claude' | 'codex', string[]> = {
 const ENV_KEY: Record<'claude' | 'codex', string> = { claude: 'PGP_CLAUDE_BIN', codex: 'PGP_CODEX_BIN' }
 
 export function resolveBin(name: 'claude' | 'codex'): string | null {
+  // QA: simulate a machine without the CLI (PGP_DEV_FAKE_MISSING=claude,codex,ollama)
+  if ((process.env['PGP_DEV_FAKE_MISSING'] ?? '').includes(name)) return null
   const settings = getSettings()
   const override = name === 'claude' ? settings.claudeBin : settings.codexBin
   if (override && existsSync(override)) return override
