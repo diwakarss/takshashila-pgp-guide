@@ -500,6 +500,42 @@ app.whenReady().then(() => {
     })().catch((e) => console.error('[kick] failed:', e))
   }
 
+  // Probe capture source-linkage: a selection that stops short of the [n]
+  // superscript must still inherit the paragraph's citations. PGP_DEV_CAPTEST=1.
+  if (process.env['PGP_DEV_CAPTEST']) {
+    void (async () => {
+      const wait = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms))
+      await wait(5000)
+      const result = await devWindow!.webContents.executeJavaScript(`(() => {
+        const div = document.createElement('div')
+        div.className = 'answer-md'
+        div.innerHTML = '<p id="cap-p">Indian spot prices up <strong>70-100%</strong> in March 2026<sup class="cite" data-cite="3">3</sup> after the strikes<sup class="cite" data-cite="7">7</sup>.</p>'
+        document.body.appendChild(div)
+        const textNode = document.getElementById('cap-p').firstChild
+        const pick = (startNode, startOff, endNode, endOff) => {
+          const r = document.createRange(); r.setStart(startNode, startOff); r.setEnd(endNode, endOff)
+          const s = window.getSelection(); s.removeAllRanges(); s.addRange(r)
+          return window.__pgpCaptureSelection()
+        }
+        // Case 1: phrase selection that excludes both superscripts
+        const c1 = pick(textNode, 0, textNode, 21)
+        // Case 2: selection spanning the first superscript
+        const p = document.getElementById('cap-p')
+        const c2 = pick(textNode, 0, p, 4) // through <strong>, text, and sup[3]
+        div.remove()
+        return JSON.stringify({ c1: { cites: c1.cites, ctx: c1.contextCites }, c2: { cites: c2.cites } })
+      })()`)
+      console.log('[cap]', result)
+      const r = JSON.parse(result as string) as { c1: { cites: number[]; ctx: number[] }; c2: { cites: number[] } }
+      const ok = r.c1.cites.length === 0 && r.c1.ctx.join(',') === '3,7' && r.c2.cites.includes(3)
+      console.log(`[cap] ${ok ? 'PASS ✓ (uncited selection inherits paragraph cites; direct cite still precise)' : 'FAIL ✗'}`)
+      app.quit()
+    })().catch((e) => {
+      console.error('[cap] failed:', e)
+      app.quit()
+    })
+  }
+
   // Probe exact-title illustration reuse (run with PGP_DISABLE_IMAGE_GEN=1 in
   // an isolated dir): seed the library from the shipped bundle, then a mangled
   // exact title must REUSE and an unknown title must MISS without generating.

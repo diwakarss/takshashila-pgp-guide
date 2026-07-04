@@ -15,8 +15,10 @@ export type CaptureFn = (capture: Capture, x: number, y: number) => void
 // keeps only the sources actually cited in the selected span.
 export type NumberedSource = { n: number; note: NoteSource }
 
-/** onMouseUp handler for an answer container: turn a selection into a capture,
- *  carrying only the sources whose [n] appears in the selected text. */
+/** onMouseUp handler for an answer container: turn a selection into a capture.
+ *  Source linkage, most-precise first: [n] markers inside the selection → the
+ *  containing paragraph's markers (people stop short of the superscript) →
+ *  all of the answer's sources (broad beats lost). */
 export function selectionCapture(
   numbered: NumberedSource[],
   from: string,
@@ -25,8 +27,8 @@ export function selectionCapture(
   return (e) => {
     const cap = captureSelection()
     if (!cap || cap.markdown.length < 3) return
-    const cited = new Set(cap.cites)
-    const sources = cited.size > 0 ? numbered.filter((x) => cited.has(x.n)).map((x) => x.note) : []
+    const cited = new Set(cap.cites.length > 0 ? cap.cites : cap.contextCites)
+    const sources = cited.size > 0 ? numbered.filter((x) => cited.has(x.n)).map((x) => x.note) : numbered.map((x) => x.note)
     onCapture({ text: cap.markdown, sources, from }, e.clientX, e.clientY)
   }
 }
