@@ -53,10 +53,22 @@ function rehypeCitations() {
 }
 
 // Markdown with GitHub-flavored extensions (tables, strikethrough…) and inline
-// [n] citations rendered as superscript elements.
+// [n] citations rendered as superscript elements. Links always open externally
+// (target=_blank routes through the main process's window-open guard → OS
+// browser); the main process's will-navigate guard backstops any plain anchor.
 export function Md(props: { children: string }): JSX.Element {
   return (
-    <ReactMarkdown remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeCitations]}>
+    <ReactMarkdown
+      remarkPlugins={[remarkGfm]}
+      rehypePlugins={[rehypeCitations]}
+      components={{
+        a: ({ children, ...rest }) => (
+          <a {...rest} target="_blank" rel="noreferrer">
+            {children}
+          </a>
+        )
+      }}
+    >
       {props.children}
     </ReactMarkdown>
   )

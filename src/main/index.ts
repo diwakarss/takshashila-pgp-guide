@@ -112,15 +112,35 @@ function createWindow(): void {
     console.log('[pgp] window ready')
   })
 
-  // Open target=_blank / external links in the OS browser, never in-app.
-  mainWindow.webContents.setWindowOpenHandler(({ url }) => {
-    void shell.openExternal(url)
-    return { action: 'deny' }
-  })
-
   // electron-vite exposes the renderer dev server URL in dev; the built
   // HTML otherwise. This keeps HMR in dev and a file load in production.
   const devServerUrl = process.env['ELECTRON_RENDERER_URL']
+
+  // Web links ALWAYS open in the OS browser, never inside the app (which has no
+  // back button). Two paths need guarding: target=_blank (window-open) AND
+  // plain <a href> clicks, which try to navigate this window away from the app.
+  const isAppUrl = (url: string): boolean => {
+    if (url.startsWith('file://')) return true
+    if (isDev && devServerUrl) {
+      try {
+        return new URL(url).origin === new URL(devServerUrl).origin
+      } catch {
+        return false
+      }
+    }
+    return false
+  }
+  mainWindow.webContents.setWindowOpenHandler(({ url }) => {
+    if (!isAppUrl(url)) void shell.openExternal(url)
+    return { action: 'deny' }
+  })
+  mainWindow.webContents.on('will-navigate', (event, url) => {
+    if (!isAppUrl(url)) {
+      event.preventDefault()
+      void shell.openExternal(url)
+    }
+  })
+
   if (isDev && devServerUrl) {
     void mainWindow.loadURL(devServerUrl)
   } else {
@@ -269,6 +289,21 @@ app.whenReady().then(() => {
 
   if (process.env['PGP_DEV_BUILD_LIBRARY']) {
     void buildLibrary().catch((e) => console.error('[lib] build failed:', e))
+  }
+
+  // Regression probe: an in-window navigation attempt must be blocked (and
+  // routed to the OS browser). PGP_DEV_NAVTEST=1.
+  if (process.env['PGP_DEV_NAVTEST']) {
+    setTimeout(() => {
+      const win = devWindow
+      if (!win) return
+      const before = win.webContents.getURL()
+      void win.webContents.executeJavaScript(`location.href='https://example.com'`).catch(() => {})
+      setTimeout(() => {
+        const after = devWindow?.webContents.getURL()
+        console.log(`[nav] ${after === before ? 'BLOCKED ✓ (sent to OS browser)' : `NAVIGATED ✗ → ${after}`}`)
+      }, 1500)
+    }, 5000)
   }
 
   // QA: screenshot each surface for a visual review (PGP_DEV_SHOTS=1).
