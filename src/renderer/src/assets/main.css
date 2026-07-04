@@ -2779,3 +2779,10 @@ code {
     grid-template-columns: 1fr;
   }
 }
+.aic-explain {
+  margin: 0 0 10px;
+  padding: 8px 12px;
+  border-left: 3px solid color-mix(in srgb, var(--brand) 35%, transparent);
+  background: color-mix(in srgb, var(--brand) 4%, var(--surface));
+  border-radius: 0 var(--radius-control) var(--radius-control) 0;
+}

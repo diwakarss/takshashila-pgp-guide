@@ -1,4 +1,5 @@
 import { existsSync } from 'node:fs'
+import { totalmem } from 'node:os'
 import type { Engine, EngineCapabilities, EngineMessage } from './types'
 import { getSettings } from '../services/settings'
 
@@ -6,10 +7,18 @@ import { getSettings } from '../services/settings'
 // with honest trade-offs (smaller model, no web search).
 
 const BASE = 'http://127.0.0.1:11434'
-export const RECOMMENDED_MODEL = 'llama3.2:3b' // small download, fine for study Q&A
+
+/** Recommend the strongest model that comfortably fits this machine's memory.
+ *  A 32GB Mac Studio and an 8GB laptop deserve different defaults. */
+export function recommendedModel(): { model: string; sizeGb: number; reason: string } {
+  const gb = totalmem() / 1073741824
+  if (gb >= 30) return { model: 'gpt-oss:20b', sizeGb: 14, reason: `strong 20B model — fits your ${Math.round(gb)} GB machine` }
+  if (gb >= 16) return { model: 'qwen3:8b', sizeGb: 5.2, reason: `capable 8B model — fits your ${Math.round(gb)} GB machine` }
+  return { model: 'llama3.2:3b', sizeGb: 2, reason: 'small model for lighter machines' }
+}
 
 export function ollamaModel(): string {
-  return getSettings().localModel ?? RECOMMENDED_MODEL
+  return getSettings().localModel ?? recommendedModel().model
 }
 
 export function ollamaInstalled(): boolean {

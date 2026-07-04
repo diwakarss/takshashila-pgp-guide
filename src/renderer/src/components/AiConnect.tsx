@@ -13,10 +13,36 @@ import type { AiStatus, PullProgress } from '../../../shared/ipc'
 type Method = 'plan' | 'api' | 'local'
 
 const METHODS: { key: Method; icon: typeof UserRound; title: string; blurb: string }[] = [
-  { key: 'plan', icon: UserRound, title: 'My account', blurb: 'Use your Claude or ChatGPT plan' },
-  { key: 'api', icon: KeyRound, title: 'API key', blurb: 'Paste an Anthropic or OpenAI key' },
-  { key: 'local', icon: Cpu, title: 'Local (free)', blurb: 'Run a model on this computer' }
+  { key: 'plan', icon: UserRound, title: 'My account', blurb: 'I pay for Claude or ChatGPT' },
+  { key: 'api', icon: KeyRound, title: 'API key', blurb: 'I have a developer key' },
+  { key: 'local', icon: Cpu, title: 'Local (free)', blurb: 'No account — run it on my computer' }
 ]
+
+// Plain-language guidance per method — most of the cohort is non-technical.
+const EXPLAIN: Record<Method, JSX.Element> = {
+  plan: (
+    <p className="muted small aic-explain">
+      <strong>Best quality, no extra cost</strong> if you already subscribe to Claude (claude.ai) or ChatGPT
+      (chatgpt.com). One-time setup: we install the provider’s free helper tool, you sign in with your normal
+      account, done. Your questions use your existing plan.
+    </p>
+  ),
+  api: (
+    <p className="muted small aic-explain">
+      An API key is a <strong>pay-per-use developer pass</strong> — you add credit with the provider and each
+      question costs a fraction of a rupee. We support <strong>Anthropic</strong> and <strong>OpenAI</strong>.
+      Get a key at console.anthropic.com or platform.openai.com (→ API keys). The app has no spend meter yet, so
+      glance at your provider dashboard now and then.
+    </p>
+  ),
+  local: (
+    <p className="muted small aic-explain">
+      <strong>Free, private, works offline</strong> — a model runs on this computer, so nothing is sent anywhere
+      and there’s nothing to pay. Trade-off: simpler answers than the paid options, and no live web research.
+      We pick a model that fits your machine.
+    </p>
+  )
+}
 
 function familyOf(engineId: string): Method {
   if (engineId.startsWith('api:')) return 'api'
@@ -59,6 +85,8 @@ export function AiConnect(props: { compact?: boolean; onStatus?: (s: AiStatus) =
           </button>
         ))}
       </div>
+
+      {method && EXPLAIN[method]}
 
       {method === 'plan' && (
         <div className="aic-panel">
@@ -144,6 +172,14 @@ function ApiCard(props: {
               {testing ? 'Testing…' : 'Save & test'}
             </button>
           </div>
+          <a
+            className="wizard-link"
+            href={a.provider === 'anthropic' ? 'https://console.anthropic.com/settings/keys' : 'https://platform.openai.com/api-keys'}
+            target="_blank"
+            rel="noreferrer"
+          >
+            Where do I get a key? <ExternalLink size={11} />
+          </a>
           {error && <p className="banner danger">{error}</p>}
         </div>
       )}
@@ -195,8 +231,7 @@ function LocalPanel(props: { status: AiStatus; onPick: (id: string) => void; onC
         </div>
 
         <p className="muted small harness-hint">
-          Free and fully private — answers come from a small model on this computer. No web search, and expect
-          simpler answers than the account options.
+          Recommended for you: <strong>{local.recommendedModel}</strong> — {local.recommendedReason}.
         </p>
 
         {!local.installed && (
@@ -233,7 +268,7 @@ function LocalPanel(props: { status: AiStatus; onPick: (id: string) => void; onC
               </div>
             ) : (
               <button className="btn primary harness-signin" onClick={() => void pull()}>
-                <Download size={14} /> Download {local.recommendedModel} (~2 GB, once)
+                <Download size={14} /> Download {local.recommendedModel} (~{local.recommendedSizeGb} GB, once)
               </button>
             )}
             {error && <p className="banner danger">{error}</p>}

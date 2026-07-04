@@ -9,7 +9,7 @@ import { agentCliEngine } from './engine/agentCli'
 import { activeEngine, ENGINES, engineById } from './engine/registry'
 import { resolveBin } from './engine/resolve'
 import { claudeAccount, codexAccount } from './engine/accounts'
-import { ollamaInstalled, ollamaRunning, ollamaModels, ollamaModel, ollamaPull } from './engine/ollama'
+import { ollamaInstalled, ollamaRunning, ollamaModels, ollamaModel, ollamaPull, recommendedModel } from './engine/ollama'
 import { spawn } from 'node:child_process'
 
 function spawnDetached(bin: string, args: string[]): void {
@@ -336,12 +336,15 @@ function registerIpc(): void {
     const running = await ollamaRunning()
     const models = running ? await ollamaModels() : []
     const want = ollamaModel()
+    const rec = recommendedModel()
     const local: LocalAiStatus = {
       engineId: 'local:ollama',
       installed: ollamaInstalled(),
       running,
       models,
       recommendedModel: want,
+      recommendedSizeGb: rec.sizeGb,
+      recommendedReason: rec.reason,
       ready: running && models.some((m) => m === want || m.startsWith(want.split(':')[0])),
       active: activeId === 'local:ollama'
     }

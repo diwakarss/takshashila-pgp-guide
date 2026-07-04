@@ -183,7 +183,9 @@ export type LocalAiStatus = {
   installed: boolean // Ollama app/binary present
   running: boolean // server answering on localhost
   models: string[]
-  recommendedModel: string
+  recommendedModel: string // RAM-aware pick for THIS machine
+  recommendedSizeGb: number
+  recommendedReason: string
   ready: boolean // running AND the chosen model is pulled
   active: boolean
 }
