@@ -28,6 +28,8 @@ export function App(): JSX.Element {
   const [courses, setCourses] = useState<CourseSummary[]>([])
   const [course, setCourse] = useState<string>('')
   const [onboarded, setOnboarded] = useState<boolean | null>(null) // null = still loading settings
+  // Explicit wizard replay (#wizard route from Settings) — state so leaving it re-renders.
+  const [forceWizard, setForceWizard] = useState(() => typeof location !== 'undefined' && location.hash === '#wizard')
 
   useEffect(() => {
     void window.pgp.getSettings().then((s) => setOnboarded(s.onboarded))
@@ -35,7 +37,9 @@ export function App(): JSX.Element {
 
   // Never show onboarding to someone whose library is already imported (the
   // builder, or a re-install over existing data) — mark them onboarded quietly.
+  // An EXPLICIT replay (#wizard route) is exempt from this shortcut.
   useEffect(() => {
+    if (location.hash === '#wizard') return
     if (onboarded === false && (status.stats?.chunks ?? 0) > 0) {
       void window.pgp.setSettings({ onboarded: true })
       setOnboarded(true)
@@ -65,9 +69,18 @@ export function App(): JSX.Element {
     setTab('tutor')
   }
 
-  const forceWizard = typeof location !== 'undefined' && location.hash === '#wizard'
   if (onboarded === null) return <div className="shell" />
-  if (!onboarded || forceWizard) return <Wizard onDone={() => setOnboarded(true)} />
+  if (!onboarded || forceWizard) {
+    return (
+      <Wizard
+        onDone={() => {
+          if (location.hash === '#wizard') location.hash = '' // leave the replay route
+          setForceWizard(false)
+          setOnboarded(true)
+        }}
+      />
+    )
+  }
 
   return (
     <div className="shell">

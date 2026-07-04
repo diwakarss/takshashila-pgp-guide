@@ -604,6 +604,31 @@ app.whenReady().then(() => {
     })().catch((e) => console.error('[ctx] failed:', e))
   }
 
+  // Regression probe: Settings → "Replay setup" must show the wizard, and
+  // finishing/skipping it must return to the app. PGP_DEV_REPLAYTEST=1.
+  if (process.env['PGP_DEV_REPLAYTEST']) {
+    void (async () => {
+      const wait = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms))
+      await wait(5000)
+      const js = (code: string): Promise<unknown> => devWindow!.webContents.executeJavaScript(code)
+      await js(`[...document.querySelectorAll('.nav-item')].find(x=>x.textContent.trim()==='Settings')?.click()`)
+      await wait(800)
+      await js(`[...document.querySelectorAll('button')].find(x=>x.textContent.trim()==='Replay setup')?.click()`)
+      await wait(2500) // reload
+      const inWizard = await js(`!!document.querySelector('.wizard')`)
+      console.log(`[replay] wizard shown after Replay setup: ${inWizard ? 'YES ✓' : 'NO ✗'}`)
+      await js(`[...document.querySelectorAll('button')].find(x=>/skip setup/i.test(x.textContent))?.click()`)
+      await wait(1200)
+      const backInApp = await js(`!!document.querySelector('.sidebar') && location.hash === ''`)
+      console.log(`[replay] back in app after skip: ${backInApp ? 'YES ✓' : 'NO ✗'}`)
+      console.log('[replay] done')
+      app.quit()
+    })().catch((e) => {
+      console.error('[replay] failed:', e)
+      app.quit()
+    })
+  }
+
   // Regression probe: an in-window navigation attempt must be blocked (and
   // routed to the OS browser). PGP_DEV_NAVTEST=1.
   if (process.env['PGP_DEV_NAVTEST']) {

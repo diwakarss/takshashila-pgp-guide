@@ -20,8 +20,11 @@ export function Settings(props: { status: SystemStatus }): JSX.Element {
     void window.pgp.setSettings({ metrics: next })
   }
 
+  // Explicit replay rides the #wizard route — we don't un-onboard (the
+  // auto-onboard guard would instantly flip it back for anyone with a library).
   const replaySetup = (): void => {
-    void window.pgp.setSettings({ onboarded: false }).then(() => location.reload())
+    location.hash = '#wizard'
+    location.reload()
   }
 
   return (
