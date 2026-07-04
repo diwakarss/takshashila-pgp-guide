@@ -619,6 +619,42 @@ app.whenReady().then(() => {
     })().catch((e) => console.error('[ctx] failed:', e))
   }
 
+  // Regression probe: the compose field grows with content and caps with a
+  // scrollbar. PGP_DEV_GROWTEST=1.
+  if (process.env['PGP_DEV_GROWTEST']) {
+    void (async () => {
+      const wait = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms))
+      await wait(5000)
+      await devWindow!.webContents.executeJavaScript(
+        `[...document.querySelectorAll('.nav-item')].find(x=>x.textContent.trim()==='Research')?.click()`
+      )
+      await wait(800)
+      const result = await devWindow!.webContents.executeJavaScript(`(() => {
+        const el = document.querySelector('.grow-input')
+        if (!el) return 'NO FIELD'
+        const set = Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype, 'value').set
+        const type = (v) => { set.call(el, v); el.dispatchEvent(new Event('input', { bubbles: true })) }
+        const h1 = el.clientHeight
+        type('line one\\nline two\\nline three')
+        const h2 = el.clientHeight
+        type(Array.from({ length: 30 }, (_, i) => 'long line ' + i).join('\\n'))
+        const h3 = el.clientHeight
+        const scrolls = el.scrollHeight > el.clientHeight
+        type('')
+        const h4 = el.clientHeight
+        return JSON.stringify({ single: h1, grown: h2, capped: h3, scrolls, shrunk: h4 })
+      })()`)
+      console.log('[grow]', result)
+      const r = JSON.parse(result as string) as { single: number; grown: number; capped: number; scrolls: boolean; shrunk: number }
+      const ok = r.grown > r.single && r.capped <= 170 && r.scrolls && r.shrunk === r.single
+      console.log(`[grow] ${ok ? 'PASS ✓ (grows, caps at ~168px with scrollbar, shrinks back)' : 'FAIL ✗'}`)
+      app.quit()
+    })().catch((e) => {
+      console.error('[grow] failed:', e)
+      app.quit()
+    })
+  }
+
   // Regression probe: Settings → "Replay setup" must show the wizard, and
   // finishing/skipping it must return to the app. PGP_DEV_REPLAYTEST=1.
   if (process.env['PGP_DEV_REPLAYTEST']) {

@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { BookOpen, Pencil, ChevronLeft, ChevronRight } from 'lucide-react'
 import { Md } from '../components/Markdown'
+import { GrowInput } from '../components/GrowInput'
 import { useNotebookCapture, selectionCapture, type CaptureFn, type NumberedSource } from '../lib/capture'
 import type {
   CourseSummary,
@@ -193,13 +194,12 @@ export function Tutor(props: {
       </div>
 
       <div className="ask-row ask-dock">
-        <input
-          className="input"
+        <GrowInput
           placeholder={thread ? 'Ask a follow-up…' : `Ask about ${courseName}…`}
           value={q}
           disabled={!engineReady || busy}
-          onChange={(e) => setQ(e.target.value)}
-          onKeyDown={(e) => e.key === 'Enter' && q.trim() && ask(q)}
+          onChange={setQ}
+          onSubmit={() => void ask(q)}
         />
         <button className="btn primary" disabled={!engineReady || busy || !q.trim()} onClick={() => ask(q)}>
           {busy ? '…' : 'Ask'}

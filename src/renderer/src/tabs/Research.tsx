@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { Search, ExternalLink, Users, Scale, Table2, Clock } from 'lucide-react'
 import { Md, Cite } from '../components/Markdown'
+import { GrowInput } from '../components/GrowInput'
 import { useNotebookCapture, selectionCapture, type CaptureFn, type NumberedSource } from '../lib/capture'
 import type { EngineStatus, LensKind, LensReply, ResearchSource, SourceType, ThreadDetail, Turn } from '../../../shared/ipc'
 
@@ -191,13 +192,12 @@ export function Research(props: {
       </div>
 
       <div className="ask-row ask-dock">
-        <input
-          className="input"
+        <GrowInput
           placeholder={thread ? 'Ask a follow-up…' : 'Research any topic…'}
           value={q}
           disabled={!engineReady || busy}
-          onChange={(e) => setQ(e.target.value)}
-          onKeyDown={(e) => e.key === 'Enter' && q.trim() && ask(q)}
+          onChange={setQ}
+          onSubmit={() => void ask(q)}
         />
         <button className="btn primary" disabled={!engineReady || busy || !q.trim()} onClick={() => ask(q)}>
           {busy ? '…' : 'Research'}

@@ -15,6 +15,7 @@ import {
   Save
 } from 'lucide-react'
 import { Md } from '../components/Markdown'
+import { GrowInput } from '../components/GrowInput'
 import { BARDACH_STEPS } from '../../../shared/ipc'
 import type {
   EngineStatus,
@@ -585,13 +586,12 @@ function Editor({ id, engine, onChanged }: { id: string; engine: EngineStatus | 
             )}
 
             <div className="ask-row">
-              <input
-                className="input"
+              <GrowInput
                 placeholder="Discuss this step with your coach…"
                 value={chatInput}
                 disabled={!engineReady || chatBusy}
-                onChange={(e) => setChatInput(e.target.value)}
-                onKeyDown={(e) => e.key === 'Enter' && chatInput.trim() && void chat(chatInput)}
+                onChange={setChatInput}
+                onSubmit={() => void chat(chatInput)}
               />
               <button
                 className="btn primary"
