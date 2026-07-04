@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
-import { BookOpen, CheckCircle2, Cpu, KeyRound, Sparkles } from 'lucide-react'
-import { HarnessCard, useHarnesses } from './components/Harnesses'
-import type { CorpusStatus, ImportProgress } from '../../shared/ipc'
+import { BookOpen, CheckCircle2, Sparkles } from 'lucide-react'
+import { AiConnect } from './components/AiConnect'
+import type { AiStatus, CorpusStatus, ImportProgress } from '../../shared/ipc'
 
 // First-launch onboarding (design D5). Welcome → connect your AI (the agent-CLI
 // is the default; it is NOT an OAuth login — the student's own Claude plan via
@@ -57,39 +57,23 @@ function Welcome({ onNext }: { onNext: () => void }): JSX.Element {
 }
 
 function ConnectAI({ onBack, onNext }: { onBack: () => void; onNext: () => void }): JSX.Element {
-  const { harnesses, refresh, checking } = useHarnesses()
+  const [ready, setReady] = useState(false)
 
-  const pick = (id: string): void => {
-    void window.pgp.setSettings({ engineChoice: id }).then(refresh)
+  const onStatus = (s: AiStatus): void => {
+    setReady(s.cli.some((h) => h.available) || s.api.some((a) => a.configured) || s.local.ready)
   }
-
-  const anyReady = harnesses?.some((h) => h.available) ?? false
 
   return (
     <div className="wizard-step">
       <Sparkles size={36} strokeWidth={1.25} style={{ color: 'var(--brand)' }} />
-      <h1>Connect your AI</h1>
+      <h1>Choose your AI</h1>
       <p className="muted">
-        PGP Guide runs on <strong>whichever plan you already have</strong> — Claude or ChatGPT. Nothing is sent
-        to us; it stays between your machine and your AI.
+        Pick whichever fits you — a plan you already pay for, an API key, or a free local model. Nothing is
+        sent to us; it stays between your machine and your AI.
       </p>
 
       <div className="wizard-ai">
-        {checking && !harnesses && <p className="muted small">Checking for your AI tools…</p>}
-        {harnesses?.map((h) => (
-          <HarnessCard key={h.id} h={h} onPick={pick} onRefresh={refresh} compact />
-        ))}
-
-        <div className="wizard-ai-alts">
-          <div className="wizard-ai-alt muted">
-            <KeyRound size={15} /> Paste an API key
-            <span className="wizard-soon">soon</span>
-          </div>
-          <div className="wizard-ai-alt muted">
-            <Cpu size={15} /> Run free on my PC (local)
-            <span className="wizard-soon">soon</span>
-          </div>
-        </div>
+        <AiConnect compact onStatus={onStatus} />
       </div>
 
       <div className="wizard-actions">
@@ -99,8 +83,8 @@ function ConnectAI({ onBack, onNext }: { onBack: () => void; onNext: () => void 
         <button
           className="btn primary"
           onClick={onNext}
-          disabled={!anyReady}
-          title={anyReady ? '' : 'Connect one of your AIs to continue'}
+          disabled={!ready}
+          title={ready ? '' : 'Connect one AI to continue'}
         >
           Continue
         </button>

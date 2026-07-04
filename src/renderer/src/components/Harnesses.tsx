@@ -91,12 +91,20 @@ export function HarnessCard(props: {
       )}
 
       {!h.installed && (
-        <p className="muted small harness-hint">
-          Install {meta.cli}, sign in once, then check again.{' '}
-          <a className="wizard-link" href={meta.install} target="_blank" rel="noreferrer">
-            Get {meta.cli} <ExternalLink size={11} />
-          </a>
-        </p>
+        <div className="harness-hint">
+          <p className="muted small">
+            {meta.name} plans connect through the free <strong>{meta.cli}</strong> tool. One-time setup: install
+            it, then sign in with your account.
+          </p>
+          <div className="harness-actions">
+            <button className="btn harness-signin" onClick={() => void window.pgp.engineInstall(h.id)}>
+              <Terminal size={14} /> Install {meta.cli} (opens Terminal)
+            </button>
+            <a className="wizard-link" href={meta.install} target="_blank" rel="noreferrer">
+              What is {meta.cli}? <ExternalLink size={11} />
+            </a>
+          </div>
+        </div>
       )}
 
       {h.installed && !h.available && (

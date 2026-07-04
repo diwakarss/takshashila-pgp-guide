@@ -1,13 +1,15 @@
 import { app, shell, BrowserWindow, ipcMain } from 'electron'
 import { join } from 'path'
-import { copyFileSync, mkdirSync, writeFileSync } from 'node:fs'
+import { copyFileSync, mkdirSync, writeFileSync, readFileSync } from 'node:fs'
 import { IPC, type AppInfo } from '../shared/ipc'
 import { studyBrain } from './services/studyBrain'
-import { getSettings, setSettings } from './services/settings'
+import { setSettings, publicSettings } from './services/settings'
+import { saveApiKey, clearApiKey, maskedApiKey } from './services/apiKeys'
 import { agentCliEngine } from './engine/agentCli'
-import { activeEngine, ENGINES } from './engine/registry'
+import { activeEngine, ENGINES, engineById } from './engine/registry'
 import { resolveBin } from './engine/resolve'
 import { claudeAccount, codexAccount } from './engine/accounts'
+import { ollamaInstalled, ollamaRunning, ollamaModels, ollamaModel, ollamaPull } from './engine/ollama'
 import { spawn } from 'node:child_process'
 
 function spawnDetached(bin: string, args: string[]): void {
@@ -28,6 +30,9 @@ import type {
   QuizResult,
   QuizSpec,
   HarnessStatus,
+  AiStatus,
+  ApiProviderStatus,
+  LocalAiStatus,
   ResearchRequest
 } from '../shared/ipc'
 
@@ -290,8 +295,106 @@ function registerIpc(): void {
     studyBrain.setFinalDraft(req.id, req.draftId)
   )
 
-  ipcMain.handle(IPC.settingsGet, () => getSettings())
-  ipcMain.handle(IPC.settingsSet, (_e, patch: Partial<AppSettings>) => setSettings(patch))
+  // Renderer-safe settings: API keys never cross IPC (masked via ai:status).
+  ipcMain.handle(IPC.settingsGet, () => publicSettings())
+  ipcMain.handle(IPC.settingsSet, (_e, patch: Partial<AppSettings>) => {
+    setSettings(patch)
+    return publicSettings()
+  })
+
+  // ── connect-your-AI (three paths: account CLIs · API keys · local) ──────
+  ipcMain.handle(IPC.aiStatus, async (): Promise<AiStatus> => {
+    const activeId = activeEngine().capabilities.id
+    const cli = await Promise.all(
+      ENGINES.map(async (e): Promise<HarnessStatus> => {
+        const kind = e.capabilities.id === 'agent-cli:codex' ? 'codex' : 'claude'
+        const binPath = resolveBin(kind)
+        const available = binPath ? await e.isAvailable() : false
+        return {
+          id: e.capabilities.id,
+          label: e.capabilities.label,
+          installed: !!binPath,
+          binPath,
+          available,
+          account: available ? (kind === 'codex' ? codexAccount() : claudeAccount()) : null,
+          active: e.capabilities.id === activeId
+        }
+      })
+    )
+    const api: ApiProviderStatus[] = (['anthropic', 'openai'] as const).map((provider) => {
+      const engineId = `api:${provider}`
+      return {
+        provider,
+        engineId,
+        label: provider === 'anthropic' ? 'Claude · API key' : 'OpenAI · API key',
+        model: provider === 'anthropic' ? 'claude-sonnet-4-5' : 'gpt-5-mini',
+        configured: maskedApiKey(provider) !== null,
+        keyMasked: maskedApiKey(provider),
+        active: engineId === activeId
+      }
+    })
+    const running = await ollamaRunning()
+    const models = running ? await ollamaModels() : []
+    const want = ollamaModel()
+    const local: LocalAiStatus = {
+      engineId: 'local:ollama',
+      installed: ollamaInstalled(),
+      running,
+      models,
+      recommendedModel: want,
+      ready: running && models.some((m) => m === want || m.startsWith(want.split(':')[0])),
+      active: activeId === 'local:ollama'
+    }
+    return { activeId, cli, api, local }
+  })
+
+  // Save an API key, then prove it with ONE tiny completion (a few tokens).
+  ipcMain.handle(IPC.aiSetApiKey, async (_e, req: { provider: 'anthropic' | 'openai'; key: string }) => {
+    saveApiKey(req.provider, req.key)
+    const engine = engineById(`api:${req.provider}`)
+    try {
+      const out = await engine!.complete(
+        [
+          { role: 'system', content: 'You are a connection test. Obey exactly.' },
+          { role: 'user', content: 'Reply with exactly: OK' }
+        ],
+        { timeoutMs: 60_000 }
+      )
+      return { ok: out.toUpperCase().includes('OK'), error: null }
+    } catch (err) {
+      clearApiKey(req.provider) // don't keep a key that doesn't work
+      return { ok: false, error: err instanceof Error ? err.message : String(err) }
+    }
+  })
+  ipcMain.handle(IPC.aiClearApiKey, (_e, provider: 'anthropic' | 'openai') => clearApiKey(provider))
+
+  ipcMain.handle(IPC.aiOllamaPull, async (event, model: string) => {
+    setSettings({ localModel: model })
+    await ollamaPull(model, (p) => {
+      if (!event.sender.isDestroyed()) event.sender.send(IPC.aiOllamaPullProgress, p)
+    })
+    return true
+  })
+
+  // Terminal handoff: run the CLI's installer for people who've never used one.
+  ipcMain.handle(IPC.engineInstall, (_e, id: string) => {
+    const cmd =
+      id === 'agent-cli:claude'
+        ? 'curl -fsSL https://claude.ai/install.sh | bash'
+        : id === 'agent-cli:codex'
+          ? 'npm install -g @openai/codex || brew install codex'
+          : id === 'local:ollama'
+            ? 'brew install ollama && brew services start ollama'
+            : null
+    if (!cmd) return false
+    if (process.platform === 'darwin') {
+      const script = `tell application "Terminal"\nactivate\ndo script ${JSON.stringify(cmd)}\nend tell`
+      spawnDetached('osascript', ['-e', script])
+      return true
+    }
+    return false
+  })
+
   ipcMain.handle(IPC.threadsList, (_e, tab?: string) => studyBrain.listThreads(tab))
   ipcMain.handle(IPC.threadGet, (_e, id: string) => studyBrain.getThread(id))
   ipcMain.handle(IPC.threadDelete, (_e, id: string) => studyBrain.deleteThread(id))
@@ -377,6 +480,70 @@ app.whenReady().then(() => {
       console.log('[kick] done')
       app.quit()
     })().catch((e) => console.error('[kick] failed:', e))
+  }
+
+  // Probe the three connect paths. PGP_DEV_AI=1|openai|anthropic-bad|ollama.
+  if (process.env['PGP_DEV_AI']) {
+    void (async () => {
+      const mode = process.env['PGP_DEV_AI']
+      if (mode === 'openai') {
+        // Smoke the OpenAI API path with JD's existing key (ONE tiny call).
+        const cfg = JSON.parse(readFileSync(join(process.env['HOME'] ?? '', '.gstack', 'openai.json'), 'utf8')) as { api_key?: string }
+        saveApiKey('openai', cfg.api_key ?? '')
+        const e = engineById('api:openai')!
+        const out = await e.complete(
+          [
+            { role: 'system', content: 'You are a connection test. Obey exactly.' },
+            { role: 'user', content: 'Reply with exactly: OPENAI-API-OK' }
+          ],
+          { timeoutMs: 60_000 }
+        )
+        console.log(`[ai] openai key masked=${maskedApiKey('openai')} → ${out.slice(0, 60)}`)
+      } else if (mode === 'anthropic-bad') {
+        saveApiKey('anthropic', 'sk-ant-bogus-key-for-error-path')
+        try {
+          await engineById('api:anthropic')!.complete([{ role: 'user', content: 'hi' }], { timeoutMs: 30_000 })
+          console.log('[ai] anthropic bogus key unexpectedly worked?!')
+        } catch (err) {
+          console.log('[ai] anthropic bad-key error (expected):', (err as Error).message.slice(0, 120))
+          clearApiKey('anthropic')
+          console.log('[ai] anthropic key cleared, masked =', maskedApiKey('anthropic'))
+        }
+      } else if (mode === 'ollama') {
+        console.log(`[ai] ollama installed=${ollamaInstalled()} running=${await ollamaRunning()} models=${(await ollamaModels()).join(',') || 'none'}`)
+        const e = engineById('local:ollama')!
+        if ((await ollamaRunning()) && !(await e.isAvailable())) {
+          // Exercise the exact pull path the UI uses, with throttled progress.
+          console.log(`[ai] pulling ${ollamaModel()}…`)
+          let lastPct = -10
+          await ollamaPull(ollamaModel(), (p) => {
+            const pct = p.total ? Math.round(((p.completed ?? 0) / p.total) * 100) : null
+            if (pct !== null && pct >= lastPct + 10) {
+              lastPct = pct
+              console.log(`[ai] pull ${pct}% (${p.status})`)
+            }
+          })
+          console.log('[ai] pull complete')
+        }
+        if (await e.isAvailable()) {
+          const out = await e.complete(
+            [
+              { role: 'system', content: 'You are a connection test. Obey exactly.' },
+              { role: 'user', content: 'Reply with exactly: OLLAMA-OK' }
+            ],
+            { timeoutMs: 120_000 }
+          )
+          console.log(`[ai] ollama complete → ${out.slice(0, 60)}`)
+        } else {
+          console.log('[ai] ollama engine not ready (model missing?)')
+        }
+      }
+      console.log('[ai] done')
+      app.quit()
+    })().catch((e) => {
+      console.error('[ai] failed:', e)
+      app.quit()
+    })
   }
 
   // Probe both harnesses: install/auth/account, and (PGP_DEV_ENGINES=codex) a

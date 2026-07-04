@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { HarnessCard, useHarnesses } from '../components/Harnesses'
+import { AiConnect } from '../components/AiConnect'
 import type { AppInfo, AppSettings, ImportProgress } from '../../../shared/ipc'
 import type { SystemStatus } from '../hooks/useSystemStatus'
 
@@ -83,25 +83,18 @@ export function Settings(props: { status: SystemStatus }): JSX.Element {
 // CLIs), see the signed-in account, sign in via the CLI's native login, and
 // override the executable path when auto-detection misses.
 function YourAI({ status }: { status: SystemStatus }): JSX.Element {
-  const { harnesses, refresh } = useHarnesses()
   const [paths, setPaths] = useState<{ claudeBin: string; codexBin: string }>({ claudeBin: '', codexBin: '' })
+  const [remount, setRemount] = useState(0)
 
   useEffect(() => {
     void window.pgp.getSettings().then((s) => setPaths({ claudeBin: s.claudeBin ?? '', codexBin: s.codexBin ?? '' }))
   }, [])
 
-  const pick = (id: string): void => {
-    void window.pgp.setSettings({ engineChoice: id }).then(() => {
-      refresh()
-      void status.refresh()
-    })
-  }
-
   const savePaths = (): void => {
     void window.pgp
       .setSettings({ claudeBin: paths.claudeBin.trim() || null, codexBin: paths.codexBin.trim() || null })
       .then(() => {
-        refresh()
+        setRemount((r) => r + 1)
         void status.refresh()
       })
   }
@@ -110,12 +103,9 @@ function YourAI({ status }: { status: SystemStatus }): JSX.Element {
     <section className="card">
       <h2>Your AI</h2>
       <p className="muted small" style={{ marginTop: 0 }}>
-        PGP Guide runs on <strong>your own plan</strong> — pick whichever you have. Nothing leaves your machine.
+        Your plan, an API key, or a free local model — pick one; switch any time. Nothing leaves your machine.
       </p>
-      {!harnesses && <p className="muted small">Checking your AI tools…</p>}
-      {harnesses?.map((h) => (
-        <HarnessCard key={h.id} h={h} onPick={pick} onRefresh={refresh} />
-      ))}
+      <AiConnect key={remount} onStatus={() => void status.refresh()} />
       <details className="proj-disclaimers">
         <summary>Advanced: executable paths</summary>
         <p className="muted small">

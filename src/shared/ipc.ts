@@ -31,6 +31,16 @@ export const IPC = {
   engineList: 'engine:list',
   /** Open the OS terminal running the harness's native login command. */
   engineSignIn: 'engine:signin',
+  /** Open the OS terminal running the CLI's installer. */
+  engineInstall: 'engine:install',
+  /** Full connect-your-AI state: CLI harnesses, API keys (masked), local Ollama. */
+  aiStatus: 'ai:status',
+  /** Save + live-test an API key (one tiny completion); returns ok/error. */
+  aiSetApiKey: 'ai:key:set',
+  aiClearApiKey: 'ai:key:clear',
+  /** Pull an Ollama model; progress streams on the event channel below. */
+  aiOllamaPull: 'ai:ollama:pull',
+  aiOllamaPullProgress: 'ai:ollama:pull:progress',
   /** Create (and title) a tutor thread up-front, before the answer runs. */
   tutorStart: 'tutor:start',
   /** Ask the tutor in a thread (new if no threadId); returns the appended turn. */
@@ -157,6 +167,31 @@ export type HarnessStatus = {
   account: HarnessAccount | null // who's signed in (local read)
   active: boolean // the student's current pick
 }
+
+export type ApiProviderStatus = {
+  provider: 'anthropic' | 'openai'
+  engineId: string // 'api:anthropic' | 'api:openai'
+  label: string
+  model: string
+  configured: boolean
+  keyMasked: string | null
+  active: boolean
+}
+
+export type LocalAiStatus = {
+  engineId: string // 'local:ollama'
+  installed: boolean // Ollama app/binary present
+  running: boolean // server answering on localhost
+  models: string[]
+  recommendedModel: string
+  ready: boolean // running AND the chosen model is pulled
+  active: boolean
+}
+
+/** Everything the connect-your-AI UI needs, in one call. */
+export type AiStatus = { activeId: string; cli: HarnessStatus[]; api: ApiProviderStatus[]; local: LocalAiStatus }
+
+export type PullProgress = { status: string; completed?: number; total?: number }
 
 export type IllustrationSpec = { id: string; title: string; composition: string }
 
@@ -462,6 +497,7 @@ export type AppSettings = {
   metrics: boolean
   claudeBin: string | null
   codexBin: string | null
+  localModel: string | null
 }
 
 /** Either a generated image (dataUrl) or a reason it couldn't be made. */

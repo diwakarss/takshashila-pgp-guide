@@ -9,6 +9,8 @@ import {
   type CourseSummary,
   type EngineStatus,
   type HarnessStatus,
+  type AiStatus,
+  type PullProgress,
   type IllustrationImage,
   type IllustrationSpec,
   type LensRequest,
@@ -50,6 +52,17 @@ const api = {
   engineStatus: (): Promise<EngineStatus> => ipcRenderer.invoke(IPC.engineStatus),
   engineList: (): Promise<HarnessStatus[]> => ipcRenderer.invoke(IPC.engineList),
   engineSignIn: (id: string): Promise<boolean> => ipcRenderer.invoke(IPC.engineSignIn, id),
+  engineInstall: (id: string): Promise<boolean> => ipcRenderer.invoke(IPC.engineInstall, id),
+  aiStatus: (): Promise<AiStatus> => ipcRenderer.invoke(IPC.aiStatus),
+  aiSetApiKey: (provider: 'anthropic' | 'openai', key: string): Promise<{ ok: boolean; error: string | null }> =>
+    ipcRenderer.invoke(IPC.aiSetApiKey, { provider, key }),
+  aiClearApiKey: (provider: 'anthropic' | 'openai'): Promise<void> => ipcRenderer.invoke(IPC.aiClearApiKey, provider),
+  aiOllamaPull: (model: string): Promise<boolean> => ipcRenderer.invoke(IPC.aiOllamaPull, model),
+  onOllamaPullProgress: (cb: (p: PullProgress) => void): (() => void) => {
+    const handler = (_e: IpcRendererEvent, p: PullProgress): void => cb(p)
+    ipcRenderer.on(IPC.aiOllamaPullProgress, handler)
+    return () => ipcRenderer.removeListener(IPC.aiOllamaPullProgress, handler)
+  },
   tutorStart: (question: string, courseCode?: string): Promise<{ threadId: string; title: string }> =>
     ipcRenderer.invoke(IPC.tutorStart, { question, courseCode }),
   askTutor: (req: AskRequest): Promise<AskResult> => ipcRenderer.invoke(IPC.tutorAsk, req),
