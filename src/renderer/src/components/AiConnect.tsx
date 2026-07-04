@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { UserRound, KeyRound, Cpu, CheckCircle2, RefreshCw, Terminal, Trash2, Download, ExternalLink } from 'lucide-react'
 import { HarnessCard } from './Harnesses'
 import type { AiStatus, PullProgress } from '../../../shared/ipc'
@@ -120,6 +120,7 @@ function ApiCard(props: {
   const [key, setKey] = useState('')
   const [testing, setTesting] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const inputRef = useRef<HTMLInputElement>(null)
 
   const save = async (): Promise<void> => {
     setTesting(true)
@@ -142,7 +143,13 @@ function ApiCard(props: {
   return (
     <div className={`harness${a.active ? ' active' : ''}${a.configured ? ' ok' : ''}`}>
       <div className="harness-head">
-        <label className="harness-pick">
+        <label
+          className="harness-pick"
+          title={a.configured ? '' : 'Paste your key and press “Save & test” — a working key is selected automatically'}
+          onClick={() => {
+            if (!a.configured) inputRef.current?.focus() // dead radio → guide to the real first step
+          }}
+        >
           <input type="radio" name="harness" checked={a.active} onChange={() => onPick(a.engineId)} disabled={!a.configured} />
           <KeyRound size={15} />
           <span className="harness-name">
@@ -160,13 +167,19 @@ function ApiCard(props: {
         </div>
       ) : (
         <div className="harness-hint">
+          <p className="muted small aic-key-hint">
+            Step 1: paste your key · Step 2: <strong>Save &amp; test</strong> (we verify it with one tiny
+            question, then select it for you).
+          </p>
           <div className="ask-row">
             <input
+              ref={inputRef}
               className="input"
               type="password"
               placeholder={a.provider === 'anthropic' ? 'sk-ant-…' : 'sk-…'}
               value={key}
               onChange={(e) => setKey(e.target.value)}
+              onKeyDown={(e) => e.key === 'Enter' && key.trim() && !testing && void save()}
             />
             <button className="btn primary" disabled={!key.trim() || testing} onClick={() => void save()}>
               {testing ? 'Testing…' : 'Save & test'}
@@ -218,7 +231,10 @@ function LocalPanel(props: { status: AiStatus; onPick: (id: string) => void; onC
     <div className="aic-panel">
       <div className={`harness${local.active ? ' active' : ''}${local.ready ? ' ok' : ''}`}>
         <div className="harness-head">
-          <label className="harness-pick">
+          <label
+            className="harness-pick"
+            title={local.ready ? '' : 'Finish the setup below — then this becomes selectable'}
+          >
             <input type="radio" name="harness" checked={local.active} onChange={() => onPick(local.engineId)} disabled={!local.ready} />
             <Cpu size={15} />
             <span className="harness-name">

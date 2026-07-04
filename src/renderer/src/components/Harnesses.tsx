@@ -53,7 +53,10 @@ export function HarnessCard(props: {
   return (
     <div className={`harness${h.active ? ' active' : ''}${h.available ? ' ok' : ''}`}>
       <div className="harness-head">
-        <label className="harness-pick">
+        <label
+          className="harness-pick"
+          title={h.available ? '' : 'Connect first (install + sign in below) — then this becomes selectable'}
+        >
           <input type="radio" name="harness" checked={h.active} onChange={() => onPick(h.id)} disabled={!h.available} />
           <Sparkles size={16} />
           <span className="harness-name">

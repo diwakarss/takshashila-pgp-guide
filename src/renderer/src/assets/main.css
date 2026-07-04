@@ -2786,3 +2786,6 @@ code {
   background: color-mix(in srgb, var(--brand) 4%, var(--surface));
   border-radius: 0 var(--radius-control) var(--radius-control) 0;
 }
+.aic-key-hint {
+  margin: 0 0 8px;
+}
