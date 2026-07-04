@@ -101,7 +101,7 @@ export function HarnessCard(props: {
           </p>
           <div className="harness-actions">
             <button className="btn harness-signin" onClick={() => void window.pgp.engineInstall(h.id)}>
-              <Terminal size={14} /> Install {meta.cli} (opens Terminal)
+              <Terminal size={14} /> Install {meta.cli}
             </button>
             <a className="wizard-link" href={meta.install} target="_blank" rel="noreferrer">
               What is {meta.cli}? <ExternalLink size={11} />
@@ -114,7 +114,7 @@ export function HarnessCard(props: {
         <div className="harness-hint">
           {signInSent ? (
             <p className="muted small">
-              <CheckCircle2 size={13} /> A Terminal window opened with <code>{meta.loginCmd}</code> — finish signing
+              <CheckCircle2 size={13} /> A terminal window opened with <code>{meta.loginCmd}</code> — finish signing
               in there, then press refresh.
             </p>
           ) : (

@@ -111,3 +111,17 @@ before the `imageEngine.isAvailable()` branch; library-match still works, genera
 off. Builder/dev keeps generation on.
 
 
+
+## Verify Windows path end-to-end (before cohort distribution)
+
+**What:** The three-path AI setup is now written cross-platform (PATH delimiter +
+.exe/.cmd resolution, cmd.exe shim spawning, PowerShell terminal handoffs,
+platform-correct installers: claude install.ps1 / npm codex / Ollama .exe
+download, LOCALAPPDATA detection) — but it has only ever RUN on macOS.
+
+**Why:** The cohort will include Windows laptops; a dead Install button or a
+mis-spawned .cmd shim would be a first-run dead end.
+
+**Where to start:** On a real Windows machine: fresh-machine wizard
+(PGP_DEV_FAKE_MISSING), install handoffs for all three paths, claude/codex
+detection + sign-in, one tutor ask per engine, Ollama pull + smoke.

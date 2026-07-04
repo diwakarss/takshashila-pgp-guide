@@ -1,21 +1,25 @@
 import { existsSync } from 'node:fs'
-import { join } from 'node:path'
+import { join, delimiter } from 'node:path'
 import { homedir } from 'node:os'
 import { getSettings } from '../services/settings'
 
-// Find the CLI binary reliably. Apps launched from Finder don't inherit the
-// shell PATH, so "claude"/"codex" alone often fails — we resolve an absolute
-// path: user override (Settings) → env override → PATH → well-known locations.
+// Find the CLI binary reliably. GUI-launched apps don't inherit the shell
+// PATH (Finder on macOS, Explorer on Windows), so we resolve an absolute path:
+// user override (Settings) → env override → PATH → well-known locations.
 
-const PROBES: Record<'claude' | 'codex', string[]> = {
-  claude: [
-    '/opt/homebrew/bin/claude',
-    '/usr/local/bin/claude',
-    join(homedir(), '.local', 'bin', 'claude'),
-    join(homedir(), '.claude', 'local', 'claude')
-  ],
-  codex: ['/opt/homebrew/bin/codex', '/usr/local/bin/codex', join(homedir(), '.local', 'bin', 'codex')]
-}
+const IS_WIN = process.platform === 'win32'
+
+// Candidate file names per platform (npm ships .cmd shims on Windows).
+const NAMES = (name: 'claude' | 'codex'): string[] => (IS_WIN ? [`${name}.exe`, `${name}.cmd`, name] : [name])
+
+const PROBE_DIRS: string[] = IS_WIN
+  ? [
+      join(homedir(), 'AppData', 'Roaming', 'npm'), // npm -g shims
+      join(homedir(), '.local', 'bin'),
+      join(homedir(), 'AppData', 'Local', 'Programs', 'claude'),
+      'C:\\Program Files\\nodejs'
+    ]
+  : ['/opt/homebrew/bin', '/usr/local/bin', join(homedir(), '.local', 'bin'), join(homedir(), '.claude', 'local')]
 
 const ENV_KEY: Record<'claude' | 'codex', string> = { claude: 'PGP_CLAUDE_BIN', codex: 'PGP_CODEX_BIN' }
 
@@ -27,9 +31,13 @@ export function resolveBin(name: 'claude' | 'codex'): string | null {
   if (override && existsSync(override)) return override
   const env = process.env[ENV_KEY[name]]
   if (env && existsSync(env)) return env
-  for (const dir of (process.env['PATH'] ?? '').split(':')) {
-    if (dir && existsSync(join(dir, name))) return join(dir, name)
+  const candidates = NAMES(name)
+  for (const dir of (process.env['PATH'] ?? '').split(delimiter)) {
+    if (!dir) continue
+    for (const file of candidates) if (existsSync(join(dir, file))) return join(dir, file)
   }
-  for (const p of PROBES[name]) if (existsSync(p)) return p
+  for (const dir of PROBE_DIRS) {
+    for (const file of candidates) if (existsSync(join(dir, file))) return join(dir, file)
+  }
   return null
 }

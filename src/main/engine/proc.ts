@@ -19,8 +19,18 @@ export function run(bin: string, args: string[], stdin: string | null, timeoutMs
   return new Promise((resolve, reject) => {
     let child
     try {
+      // Windows npm shims (.cmd/.bat) can't be spawned directly (EINVAL since
+      // the Node CVE fix) — run them through cmd.exe with each arg quoted.
+      const isCmdShim = process.platform === 'win32' && /\.(cmd|bat)$/i.test(bin)
+      const spawnBin = isCmdShim ? 'cmd.exe' : bin
+      const spawnArgs = isCmdShim ? ['/d', '/s', '/c', [bin, ...args].map((a) => `"${a}"`).join(' ')] : args
       // Neutral cwd so the CLI doesn't inherit a project config (CLAUDE.md etc).
-      child = spawn(bin, args, { stdio: ['pipe', 'pipe', 'pipe'], cwd: tmpdir() })
+      child = spawn(spawnBin, spawnArgs, {
+        stdio: ['pipe', 'pipe', 'pipe'],
+        cwd: tmpdir(),
+        windowsHide: true,
+        ...(isCmdShim ? { windowsVerbatimArguments: true } : {})
+      })
     } catch (e) {
       reject(e)
       return

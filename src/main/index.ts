@@ -16,6 +16,20 @@ function spawnDetached(bin: string, args: string[]): void {
   const child = spawn(bin, args, { detached: true, stdio: 'ignore' })
   child.unref()
 }
+
+/** Open the OS terminal (Terminal.app / PowerShell) running a command. */
+function openInTerminal(cmd: string): boolean {
+  if (process.platform === 'darwin') {
+    const script = `tell application "Terminal"\nactivate\ndo script ${JSON.stringify(cmd)}\nend tell`
+    spawnDetached('osascript', ['-e', script])
+    return true
+  }
+  if (process.platform === 'win32') {
+    spawnDetached('cmd.exe', ['/c', 'start', 'powershell', '-NoExit', '-Command', cmd])
+    return true
+  }
+  return false // linux: UI shows the command to copy instead
+}
 import { imageEngine } from './illustrate/imageEngine'
 import { extractConcepts } from './illustrate/extract'
 import type {
@@ -232,12 +246,7 @@ function registerIpc(): void {
     const kind = id === 'agent-cli:codex' ? 'codex' : 'claude'
     const bin = resolveBin(kind) ?? kind
     const cmd = kind === 'codex' ? `${bin} login` : `${bin} /login`
-    if (process.platform === 'darwin') {
-      const script = `tell application "Terminal"\nactivate\ndo script ${JSON.stringify(cmd)}\nend tell`
-      spawnDetached('osascript', ['-e', script])
-      return true
-    }
-    return false // other platforms: show the command in the UI instead
+    return openInTerminal(cmd)
   })
 
   ipcMain.handle(IPC.corpusCourses, () => studyBrain.courses())
@@ -380,22 +389,28 @@ function registerIpc(): void {
   })
 
   // Terminal handoff: run the CLI's installer for people who've never used one.
+  // Commands are platform-correct (curl/brew on macOS, PowerShell on Windows).
   ipcMain.handle(IPC.engineInstall, (_e, id: string) => {
+    const win = process.platform === 'win32'
+    if (id === 'local:ollama' && win) {
+      // Windows Ollama ships as a normal installer — the friendliest route.
+      void shell.openExternal('https://ollama.com/download/windows')
+      return true
+    }
     const cmd =
       id === 'agent-cli:claude'
-        ? 'curl -fsSL https://claude.ai/install.sh | bash'
+        ? win
+          ? 'irm https://claude.ai/install.ps1 | iex'
+          : 'curl -fsSL https://claude.ai/install.sh | bash'
         : id === 'agent-cli:codex'
-          ? 'npm install -g @openai/codex || brew install codex'
+          ? win
+            ? 'npm install -g @openai/codex'
+            : 'npm install -g @openai/codex || brew install codex'
           : id === 'local:ollama'
             ? 'brew install ollama && brew services start ollama'
             : null
     if (!cmd) return false
-    if (process.platform === 'darwin') {
-      const script = `tell application "Terminal"\nactivate\ndo script ${JSON.stringify(cmd)}\nend tell`
-      spawnDetached('osascript', ['-e', script])
-      return true
-    }
-    return false
+    return openInTerminal(cmd)
   })
 
   ipcMain.handle(IPC.threadsList, (_e, tab?: string) => studyBrain.listThreads(tab))

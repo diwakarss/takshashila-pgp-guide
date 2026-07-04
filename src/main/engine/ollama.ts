@@ -25,6 +25,13 @@ const fakeMissing = (): boolean => (process.env['PGP_DEV_FAKE_MISSING'] ?? '').i
 
 export function ollamaInstalled(): boolean {
   if (fakeMissing()) return false
+  if (process.platform === 'win32') {
+    const local = process.env['LOCALAPPDATA'] ?? ''
+    return (
+      (!!local && existsSync(`${local}\\Programs\\Ollama\\ollama.exe`)) ||
+      existsSync('C:\\Program Files\\Ollama\\ollama.exe')
+    )
+  }
   return (
     existsSync('/opt/homebrew/bin/ollama') ||
     existsSync('/usr/local/bin/ollama') ||

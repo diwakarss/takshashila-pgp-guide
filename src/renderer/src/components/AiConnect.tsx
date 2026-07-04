@@ -253,7 +253,7 @@ function LocalPanel(props: { status: AiStatus; onPick: (id: string) => void; onC
         {!local.installed && (
           <div className="harness-actions">
             <button className="btn harness-signin" onClick={() => void window.pgp.engineInstall(local.engineId)}>
-              <Terminal size={14} /> Install Ollama (opens Terminal)
+              <Terminal size={14} /> Install Ollama
             </button>
             <a className="wizard-link" href="https://ollama.com/download" target="_blank" rel="noreferrer">
               Or download the app <ExternalLink size={11} />
