@@ -26,3 +26,23 @@ export function classifyCourse(slug: string, title?: string | null): Course {
   if (FUND_RE.test(s)) return COURSE_FUND
   return COURSE_GENERAL
 }
+
+/** Parse an explicit frontmatter course field like "PP221: Fundamentals of
+ *  Public Policy" (the corpus now ships these). Null when absent/unparseable. */
+export function parseCourseField(v: unknown): Course | null {
+  if (typeof v !== 'string' || !v.trim()) return null
+  const m = v.trim().match(/^([A-Z]{2,4}\s?\d{2,4})\s*[:\-–—]\s*(.+)$/)
+  if (m) return { code: m[1].replace(/\s+/g, ''), name: m[2].trim() }
+  const known = COURSES.find((c) => c.code.toLowerCase() === v.trim().toLowerCase())
+  return known ?? null
+}
+
+/** The course for a page: explicit frontmatter wins; the slug heuristic is the
+ *  fallback for pages that predate the course field. */
+export function resolveCourse(
+  frontmatter: Record<string, unknown> | null | undefined,
+  slug: string,
+  title?: string | null
+): Course {
+  return parseCourseField(frontmatter?.['course']) ?? classifyCourse(slug, title)
+}

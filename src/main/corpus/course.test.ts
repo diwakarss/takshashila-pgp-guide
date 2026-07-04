@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { classifyCourse, COURSE_MICRO, COURSE_FUND, COURSE_GENERAL } from './course'
+import { classifyCourse, parseCourseField, resolveCourse, COURSE_MICRO, COURSE_FUND, COURSE_GENERAL } from './course'
 
 describe('classifyCourse', () => {
   it('maps microeconomics material to PP231', () => {
@@ -29,5 +29,25 @@ describe('classifyCourse', () => {
     for (const slug of ['pgp10-3-anti-plagiarism-policy', 'pgp-induction-recording', 'pgp10-important-dates']) {
       expect(classifyCourse(slug).code).toBe(COURSE_GENERAL.code)
     }
+  })
+})
+
+describe('parseCourseField / resolveCourse', () => {
+  it('parses the corpus frontmatter format', () => {
+    expect(parseCourseField('PP221: Fundamentals of Public Policy')).toEqual({
+      code: 'PP221',
+      name: 'Fundamentals of Public Policy'
+    })
+    expect(parseCourseField('PP231: Microeconomics-I')?.code).toBe('PP231')
+  })
+  it('rejects junk', () => {
+    expect(parseCourseField('')).toBeNull()
+    expect(parseCourseField(42)).toBeNull()
+    expect(parseCourseField('just words')).toBeNull()
+  })
+  it('frontmatter wins over the slug heuristic; heuristic is the fallback', () => {
+    expect(resolveCourse({ course: 'PP221: Fundamentals of Public Policy' }, 'pgp-reading-demand-curves').code).toBe('PP221')
+    expect(resolveCourse({}, 'pgp-reading-demand-curves').code).toBe('PP231')
+    expect(resolveCourse(null, 'pgp-induction-welcome').code).toBe('GENERAL')
   })
 })

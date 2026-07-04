@@ -5,7 +5,7 @@ import { randomUUID } from 'node:crypto'
 import { Brain, type ConceptRecord } from '../brain/brain'
 import { nomicEmbedder } from '../embed/embedder'
 import { importDirectory, type ImportProgress, type ImportResult } from '../corpus/import'
-import { classifyCourse } from '../corpus/course'
+import { resolveCourse } from '../corpus/course'
 import { imageEngine } from '../illustrate/imageEngine'
 import { activeEngine } from '../engine/registry'
 import { runTutor, summariseReply, type TurnContext } from './tutor'
@@ -96,7 +96,7 @@ class StudyBrainService {
       const brain = await Brain.open(join(app.getPath('userData'), 'brain'))
       // Backfill course tags for brains imported before course support existed
       // (cheap, no re-embedding). Idempotent.
-      await brain.retagCourses(classifyCourse)
+      await brain.retagCourses((slug, title, fm) => resolveCourse(fm, slug, title))
       this.brain = brain
       // Warm the embedder in the background so the first query/import isn't a
       // cold start (eng-review D10). Non-blocking.

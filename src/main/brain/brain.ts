@@ -668,13 +668,19 @@ export class Brain {
 
   /** Backfill course_code/name for every corpus page using `classify`. Cheap
    *  (no re-embedding) — used to upgrade brains imported before courses. */
-  async retagCourses(classify: (slug: string, title: string | null) => { code: string; name: string }): Promise<number> {
-    const pages = await this.db.query<{ slug: string; title: string | null }>(
-      `SELECT slug, title FROM pages WHERE source = 'corpus'`
+  async retagCourses(
+    classify: (slug: string, title: string | null, frontmatter: Record<string, unknown> | null) => { code: string; name: string }
+  ): Promise<number> {
+    const pages = await this.db.query<{ slug: string; title: string | null; frontmatter: unknown }>(
+      `SELECT slug, title, frontmatter FROM pages WHERE source = 'corpus'`
     )
     let updated = 0
     for (const p of pages.rows) {
-      const c = classify(p.slug, p.title)
+      const fm = (typeof p.frontmatter === 'string' ? JSON.parse(p.frontmatter) : p.frontmatter) as Record<
+        string,
+        unknown
+      > | null
+      const c = classify(p.slug, p.title, fm ?? null)
       await this.db.query(`UPDATE pages SET course_code = $1, course_name = $2 WHERE slug = $3`, [
         c.code,
         c.name,
