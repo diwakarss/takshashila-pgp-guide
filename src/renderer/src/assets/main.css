@@ -2627,3 +2627,93 @@ code {
   position: relative;
   top: 2px;
 }
+
+/* ── harness cards (Your AI: Claude / ChatGPT via their CLIs) ── */
+.harness {
+  position: relative;
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius-card);
+  padding: 12px 16px;
+  margin-bottom: 10px;
+  background: var(--surface);
+}
+.harness.ok {
+  border-color: color-mix(in srgb, var(--success) 35%, transparent);
+}
+.harness.active {
+  border-color: var(--brand);
+  box-shadow: 0 0 0 1px var(--brand);
+}
+.harness-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+.harness-pick {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  min-width: 0;
+}
+.harness-pick input {
+  accent-color: var(--brand);
+}
+.harness-name {
+  font-weight: 500;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.harness-detail {
+  margin-top: 8px;
+  border-top: 1px solid var(--hairline);
+}
+.harness-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 13px;
+  padding: 5px 0;
+  border-bottom: 1px solid var(--hairline);
+}
+.harness-row:last-child {
+  border-bottom: none;
+}
+.harness-row .label {
+  color: var(--muted);
+}
+.harness-hint {
+  margin: 8px 0 0;
+}
+.harness-hint p {
+  margin: 0;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  flex-wrap: wrap;
+}
+.harness-signin {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  padding: 6px 12px;
+}
+.harness-path {
+  margin: 6px 0 0;
+  font-size: 11px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.harness-refresh {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  opacity: 0.6;
+}
+.harness .pill {
+  margin-right: 28px;
+}

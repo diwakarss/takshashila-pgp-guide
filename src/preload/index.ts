@@ -8,6 +8,7 @@ import {
   type CorpusStatus,
   type CourseSummary,
   type EngineStatus,
+  type HarnessStatus,
   type IllustrationImage,
   type IllustrationSpec,
   type LensRequest,
@@ -47,6 +48,8 @@ const api = {
   search: (query: string): Promise<SearchHit[]> => ipcRenderer.invoke(IPC.brainSearch, query),
   courses: (): Promise<CourseSummary[]> => ipcRenderer.invoke(IPC.corpusCourses),
   engineStatus: (): Promise<EngineStatus> => ipcRenderer.invoke(IPC.engineStatus),
+  engineList: (): Promise<HarnessStatus[]> => ipcRenderer.invoke(IPC.engineList),
+  engineSignIn: (id: string): Promise<boolean> => ipcRenderer.invoke(IPC.engineSignIn, id),
   tutorStart: (question: string, courseCode?: string): Promise<{ threadId: string; title: string }> =>
     ipcRenderer.invoke(IPC.tutorStart, { question, courseCode }),
   askTutor: (req: AskRequest): Promise<AskResult> => ipcRenderer.invoke(IPC.tutorAsk, req),

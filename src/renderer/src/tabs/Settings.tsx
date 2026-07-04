@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { HarnessCard, useHarnesses } from '../components/Harnesses'
 import type { AppInfo, AppSettings, ImportProgress } from '../../../shared/ipc'
 import type { SystemStatus } from '../hooks/useSystemStatus'
 
@@ -29,27 +30,7 @@ export function Settings(props: { status: SystemStatus }): JSX.Element {
         <h1>Settings</h1>
       </header>
 
-      <section className="card">
-        <h2>Your AI</h2>
-        <div className="status-row">
-          <span className="label">Connected</span>
-          <span>
-            {status.engine ? (
-              status.engine.available ? (
-                <span className="pill ok">{status.engine.label}</span>
-              ) : (
-                <span className="pill danger">{status.engine.label} — not reachable</span>
-              )
-            ) : (
-              <span className="pill pending">…</span>
-            )}
-          </span>
-        </div>
-        <p className="muted small">
-          PGP Guide runs on your own Claude plan through the Claude Code CLI — nothing leaves your machine.
-          API-key and local-model options arrive with a later update.
-        </p>
-      </section>
+      <YourAI status={status} />
 
       <CourseLibrary status={status} />
 
@@ -95,6 +76,70 @@ export function Settings(props: { status: SystemStatus }): JSX.Element {
         )}
       </section>
     </div>
+  )
+}
+
+// Conductor-style harness section: pick your AI (Claude / ChatGPT via their
+// CLIs), see the signed-in account, sign in via the CLI's native login, and
+// override the executable path when auto-detection misses.
+function YourAI({ status }: { status: SystemStatus }): JSX.Element {
+  const { harnesses, refresh } = useHarnesses()
+  const [paths, setPaths] = useState<{ claudeBin: string; codexBin: string }>({ claudeBin: '', codexBin: '' })
+
+  useEffect(() => {
+    void window.pgp.getSettings().then((s) => setPaths({ claudeBin: s.claudeBin ?? '', codexBin: s.codexBin ?? '' }))
+  }, [])
+
+  const pick = (id: string): void => {
+    void window.pgp.setSettings({ engineChoice: id }).then(() => {
+      refresh()
+      void status.refresh()
+    })
+  }
+
+  const savePaths = (): void => {
+    void window.pgp
+      .setSettings({ claudeBin: paths.claudeBin.trim() || null, codexBin: paths.codexBin.trim() || null })
+      .then(() => {
+        refresh()
+        void status.refresh()
+      })
+  }
+
+  return (
+    <section className="card">
+      <h2>Your AI</h2>
+      <p className="muted small" style={{ marginTop: 0 }}>
+        PGP Guide runs on <strong>your own plan</strong> — pick whichever you have. Nothing leaves your machine.
+      </p>
+      {!harnesses && <p className="muted small">Checking your AI tools…</p>}
+      {harnesses?.map((h) => (
+        <HarnessCard key={h.id} h={h} onPick={pick} onRefresh={refresh} />
+      ))}
+      <details className="proj-disclaimers">
+        <summary>Advanced: executable paths</summary>
+        <p className="muted small">
+          Leave empty to auto-detect. Set a full path if your CLI lives somewhere unusual.
+        </p>
+        <div className="ask-row">
+          <input
+            className="input"
+            placeholder="/opt/homebrew/bin/claude"
+            value={paths.claudeBin}
+            onChange={(e) => setPaths((p) => ({ ...p, claudeBin: e.target.value }))}
+          />
+          <input
+            className="input"
+            placeholder="~/.local/bin/codex"
+            value={paths.codexBin}
+            onChange={(e) => setPaths((p) => ({ ...p, codexBin: e.target.value }))}
+          />
+          <button className="btn" onClick={savePaths}>
+            Save
+          </button>
+        </div>
+      </details>
+    </section>
   )
 }
 

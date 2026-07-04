@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
-import { BookOpen, CheckCircle2, Cpu, KeyRound, Sparkles, RefreshCw, ExternalLink } from 'lucide-react'
-import type { CorpusStatus, EngineStatus, ImportProgress } from '../../shared/ipc'
+import { BookOpen, CheckCircle2, Cpu, KeyRound, Sparkles } from 'lucide-react'
+import { HarnessCard, useHarnesses } from './components/Harnesses'
+import type { CorpusStatus, ImportProgress } from '../../shared/ipc'
 
 // First-launch onboarding (design D5). Welcome → connect your AI (the agent-CLI
 // is the default; it is NOT an OAuth login — the student's own Claude plan via
@@ -9,8 +10,9 @@ export function Wizard(props: { onDone: () => void }): JSX.Element {
   const { onDone } = props
   const [step, setStep] = useState(0)
 
-  const finish = (engineChoice: string | null): void => {
-    void window.pgp.setSettings({ onboarded: true, engineChoice }).then(onDone)
+  // engineChoice is saved live when the student picks a harness card.
+  const finish = (): void => {
+    void window.pgp.setSettings({ onboarded: true }).then(onDone)
   }
 
   return (
@@ -20,14 +22,14 @@ export function Wizard(props: { onDone: () => void }): JSX.Element {
         {step === 0 && <Welcome onNext={() => setStep(1)} />}
         {step === 1 && <ConnectAI onBack={() => setStep(0)} onNext={() => setStep(2)} />}
         {step === 2 && <ImportLibrary onBack={() => setStep(1)} onNext={() => setStep(3)} />}
-        {step === 3 && <Done onStart={() => finish('agent-cli:claude')} />}
+        {step === 3 && <Done onStart={finish} />}
         <div className="wizard-foot">
           <div className="wizard-dots">
             {[0, 1, 2, 3].map((i) => (
               <span key={i} className={`wizard-dot${i === step ? ' on' : ''}`} />
             ))}
           </div>
-          <button className="btn ghost" onClick={() => finish(null)}>
+          <button className="btn ghost" onClick={finish}>
             Skip setup
           </button>
         </div>
@@ -55,55 +57,28 @@ function Welcome({ onNext }: { onNext: () => void }): JSX.Element {
 }
 
 function ConnectAI({ onBack, onNext }: { onBack: () => void; onNext: () => void }): JSX.Element {
-  const [engine, setEngine] = useState<EngineStatus | null>(null)
-  const [checking, setChecking] = useState(true)
+  const { harnesses, refresh, checking } = useHarnesses()
 
-  const check = (): void => {
-    setChecking(true)
-    void window.pgp.engineStatus().then((e) => {
-      setEngine(e)
-      setChecking(false)
-    })
+  const pick = (id: string): void => {
+    void window.pgp.setSettings({ engineChoice: id }).then(refresh)
   }
-  useEffect(check, [])
 
-  const ready = engine?.available ?? false
+  const anyReady = harnesses?.some((h) => h.available) ?? false
 
   return (
     <div className="wizard-step">
       <Sparkles size={36} strokeWidth={1.25} style={{ color: 'var(--brand)' }} />
       <h1>Connect your AI</h1>
       <p className="muted">
-        PGP Guide runs on <strong>your own AI plan</strong> — nothing is sent to us. The recommended option uses
-        your Claude subscription through the Claude Code CLI.
+        PGP Guide runs on <strong>whichever plan you already have</strong> — Claude or ChatGPT. Nothing is sent
+        to us; it stays between your machine and your AI.
       </p>
 
       <div className="wizard-ai">
-        <div className={`wizard-ai-card${ready ? ' ok' : ''}`}>
-          <div className="wizard-ai-head">
-            <Sparkles size={18} /> Use my subscription
-          </div>
-          {checking ? (
-            <p className="muted small">Checking for the Claude CLI…</p>
-          ) : ready ? (
-            <p className="wizard-ok">
-              <CheckCircle2 size={16} /> Connected — {engine?.label}
-            </p>
-          ) : (
-            <>
-              <p className="muted small">
-                Not detected. Install <strong>Claude Code</strong>, run <code>claude</code> once to sign in, then
-                check again.
-              </p>
-              <a className="wizard-link" href="https://claude.com/claude-code" target="_blank" rel="noreferrer">
-                Get Claude Code <ExternalLink size={12} />
-              </a>
-              <button className="btn wizard-recheck" onClick={check}>
-                <RefreshCw size={14} /> Check again
-              </button>
-            </>
-          )}
-        </div>
+        {checking && !harnesses && <p className="muted small">Checking for your AI tools…</p>}
+        {harnesses?.map((h) => (
+          <HarnessCard key={h.id} h={h} onPick={pick} onRefresh={refresh} compact />
+        ))}
 
         <div className="wizard-ai-alts">
           <div className="wizard-ai-alt muted">
@@ -121,7 +96,12 @@ function ConnectAI({ onBack, onNext }: { onBack: () => void; onNext: () => void 
         <button className="btn ghost" onClick={onBack}>
           Back
         </button>
-        <button className="btn primary" onClick={onNext} disabled={!ready} title={ready ? '' : 'Connect your AI to continue'}>
+        <button
+          className="btn primary"
+          onClick={onNext}
+          disabled={!anyReady}
+          title={anyReady ? '' : 'Connect one of your AIs to continue'}
+        >
           Continue
         </button>
       </div>

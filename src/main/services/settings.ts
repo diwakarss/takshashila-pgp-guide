@@ -8,11 +8,13 @@ import { existsSync, readFileSync, writeFileSync } from 'node:fs'
 
 export type AppSettings = {
   onboarded: boolean
-  engineChoice: string | null // which AI the student picked in the wizard
+  engineChoice: string | null // active harness: 'agent-cli:claude' | 'agent-cli:codex'
   metrics: boolean // anonymous usage metrics opt-in
+  claudeBin: string | null // executable path overrides (Settings)
+  codexBin: string | null
 }
 
-const DEFAULTS: AppSettings = { onboarded: false, engineChoice: null, metrics: true }
+const DEFAULTS: AppSettings = { onboarded: false, engineChoice: null, metrics: true, claudeBin: null, codexBin: null }
 
 function file(): string {
   return join(app.getPath('userData'), 'settings.json')

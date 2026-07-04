@@ -27,6 +27,10 @@ export const IPC = {
   corpusCourses: 'corpus:courses',
   /** Which engine is connected and whether it's usable right now. */
   engineStatus: 'engine:status',
+  /** All harnesses (Claude / Codex): availability, signed-in account, active pick. */
+  engineList: 'engine:list',
+  /** Open the OS terminal running the harness's native login command. */
+  engineSignIn: 'engine:signin',
   /** Create (and title) a tutor thread up-front, before the answer runs. */
   tutorStart: 'tutor:start',
   /** Ask the tutor in a thread (new if no threadId); returns the appended turn. */
@@ -139,6 +143,19 @@ export type EngineStatus = {
   label: string
   qualityTier: 'high' | 'medium' | 'low'
   available: boolean
+}
+
+// ── harness auth (Conductor-style: CLI detected → signed-in account shown) ──
+export type HarnessAccount = { provider: string; plan: string | null; account: string | null; org: string | null }
+
+export type HarnessStatus = {
+  id: string // 'agent-cli:claude' | 'agent-cli:codex'
+  label: string
+  installed: boolean // binary found
+  binPath: string | null // resolved executable path
+  available: boolean // installed AND authenticated/working
+  account: HarnessAccount | null // who's signed in (local read)
+  active: boolean // the student's current pick
 }
 
 export type IllustrationSpec = { id: string; title: string; composition: string }
@@ -439,7 +456,13 @@ export type ProjectsOverview = {
 export type CoachAction = 'brainstorm' | 'evidence' | 'stakeholders' | 'proofread' | 'review'
 export type CoachResult = { action: CoachAction; title: string; markdown: string; blocked?: boolean }
 
-export type AppSettings = { onboarded: boolean; engineChoice: string | null; metrics: boolean }
+export type AppSettings = {
+  onboarded: boolean
+  engineChoice: string | null
+  metrics: boolean
+  claudeBin: string | null
+  codexBin: string | null
+}
 
 /** Either a generated image (dataUrl) or a reason it couldn't be made. */
 export type IllustrationImage = {

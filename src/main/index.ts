@@ -5,6 +5,15 @@ import { IPC, type AppInfo } from '../shared/ipc'
 import { studyBrain } from './services/studyBrain'
 import { getSettings, setSettings } from './services/settings'
 import { agentCliEngine } from './engine/agentCli'
+import { activeEngine, ENGINES } from './engine/registry'
+import { resolveBin } from './engine/resolve'
+import { claudeAccount, codexAccount } from './engine/accounts'
+import { spawn } from 'node:child_process'
+
+function spawnDetached(bin: string, args: string[]): void {
+  const child = spawn(bin, args, { detached: true, stdio: 'ignore' })
+  child.unref()
+}
 import { imageEngine } from './illustrate/imageEngine'
 import { extractConcepts } from './illustrate/extract'
 import type {
@@ -18,6 +27,7 @@ import type {
   NoteSource,
   QuizResult,
   QuizSpec,
+  HarnessStatus,
   ResearchRequest
 } from '../shared/ipc'
 
@@ -181,13 +191,48 @@ function registerIpc(): void {
   })
 
   ipcMain.handle(IPC.engineStatus, async () => {
-    const caps = agentCliEngine.capabilities
+    const engine = activeEngine()
+    const caps = engine.capabilities
     return {
       id: caps.id,
       label: caps.label,
       qualityTier: caps.qualityTier,
-      available: await agentCliEngine.isAvailable()
+      available: await engine.isAvailable()
     }
+  })
+
+  // Conductor-style harness list: install/auth state + signed-in account per CLI.
+  ipcMain.handle(IPC.engineList, async () => {
+    const active = activeEngine().capabilities.id
+    return Promise.all(
+      ENGINES.map(async (e): Promise<HarnessStatus> => {
+        const kind = e.capabilities.id === 'agent-cli:codex' ? 'codex' : 'claude'
+        const binPath = resolveBin(kind)
+        const available = binPath ? await e.isAvailable() : false
+        return {
+          id: e.capabilities.id,
+          label: e.capabilities.label,
+          installed: !!binPath,
+          binPath,
+          available,
+          account: available ? (kind === 'codex' ? codexAccount() : claudeAccount()) : null,
+          active: e.capabilities.id === active
+        }
+      })
+    )
+  })
+
+  // Open the OS terminal running the harness's native login (design D5 handoff).
+  ipcMain.handle(IPC.engineSignIn, (_e, id: string) => {
+    const kind = id === 'agent-cli:codex' ? 'codex' : 'claude'
+    const bin = resolveBin(kind) ?? kind
+    const cmd = kind === 'codex' ? `${bin} login` : `${bin} /login`
+    if (process.platform === 'darwin') {
+      const script = `tell application "Terminal"\nactivate\ndo script ${JSON.stringify(cmd)}\nend tell`
+      spawnDetached('osascript', ['-e', script])
+      return true
+    }
+    return false // other platforms: show the command in the UI instead
   })
 
   ipcMain.handle(IPC.corpusCourses, () => studyBrain.courses())
@@ -298,6 +343,32 @@ app.whenReady().then(() => {
     void buildLibrary().catch((e) => console.error('[lib] build failed:', e))
   }
 
+  // Probe both harnesses: install/auth/account, and (PGP_DEV_ENGINES=codex) a
+  // real completion through the Codex engine via the registry.
+  if (process.env['PGP_DEV_ENGINES']) {
+    void (async () => {
+      for (const e of ENGINES) {
+        const kind = e.capabilities.id === 'agent-cli:codex' ? 'codex' : 'claude'
+        const bin = resolveBin(kind)
+        const avail = bin ? await e.isAvailable() : false
+        const acct = avail ? (kind === 'codex' ? codexAccount() : claudeAccount()) : null
+        console.log(
+          `[eng] ${e.capabilities.id}: bin=${bin ?? 'none'} available=${avail} account=${acct ? `${acct.account} (${acct.plan ?? '?'}${acct.org ? ' · ' + acct.org : ''})` : 'n/a'}`
+        )
+      }
+      if (process.env['PGP_DEV_ENGINES'] === 'codex') {
+        setSettings({ engineChoice: 'agent-cli:codex' })
+        console.log('[eng] active =', activeEngine().capabilities.id)
+        const out = await activeEngine().complete([
+          { role: 'system', content: 'You are a test harness. Obey exactly.' },
+          { role: 'user', content: 'Reply with exactly: CODEX-ENGINE-OK' }
+        ])
+        console.log('[eng] codex complete →', out.slice(0, 80))
+      }
+      console.log('[eng] done')
+    })().catch((e) => console.error('[eng] failed:', e))
+  }
+
   // Regression probe: on a mid-flow step, the coach must treat completed steps
   // as BEHIND the student (never "we'll do that in step 2" when step 2 is done).
   // PGP_DEV_CTXTEST=1 — throwaway project, self-cleaning.
@@ -370,10 +441,15 @@ app.whenReady().then(() => {
       await wait(600)
       await win.webContents.executeJavaScript(`(()=>{const c=document.querySelector('.proj-card');if(c)c.click()})()`)
       await shoot('projects-editor')
-      // Wizard (force via hash).
+      // Wizard (force via hash), then its connect-AI step.
       await win.webContents.executeJavaScript(`location.hash='#wizard';location.reload()`)
       await wait(2500)
       await shoot('wizard')
+      await win.webContents.executeJavaScript(
+        `(()=>{const b=[...document.querySelectorAll('.wizard-step .btn.primary')].find(x=>/get started/i.test(x.textContent));if(b)b.click()})()`
+      )
+      await wait(2500)
+      await shoot('wizard-connect')
       console.log('[shots] done ->', dir)
     })().catch((e) => console.error('[shots] failed:', e))
   }

@@ -7,7 +7,7 @@ import { nomicEmbedder } from '../embed/embedder'
 import { importDirectory, type ImportProgress, type ImportResult } from '../corpus/import'
 import { classifyCourse } from '../corpus/course'
 import { imageEngine } from '../illustrate/imageEngine'
-import { agentCliEngine } from '../engine/agentCli'
+import { activeEngine } from '../engine/registry'
 import { runTutor, summariseReply, type TurnContext } from './tutor'
 import { runResearch, runLens, lensTitle } from './research'
 import { runCoach, coachTitle, runStepChat } from './projectCoach'
@@ -205,7 +205,7 @@ class StudyBrainService {
 
     const reply = await runTutor(
       { question: req.question, courseCode, history },
-      { search: (q, l, c) => this.search(q, l, c), engine: agentCliEngine }
+      { search: (q, l, c) => this.search(q, l, c), engine: activeEngine() }
     )
     const turn = await brain.appendTurn(threadId, { id: randomUUID(), question: req.question, answer: reply })
     return { threadId, turn }
@@ -237,7 +237,7 @@ class StudyBrainService {
       await brain.createThread({ id: threadId, tab: 'research', courseCode: null, title: makeTitle(req.question) })
     }
 
-    const reply = await runResearch({ question: req.question, history }, { engine: agentCliEngine })
+    const reply = await runResearch({ question: req.question, history }, { engine: activeEngine() })
     const turn = await brain.appendTurn(threadId, { id: randomUUID(), question: req.question, answer: reply })
     return { threadId, turn }
   }
@@ -248,7 +248,7 @@ class StudyBrainService {
     const brain = await this.open()
     const reply = await runLens(
       { question: req.question, lens: req.lens, context: req.context },
-      { engine: agentCliEngine }
+      { engine: activeEngine() }
     )
     const turn = await brain.appendTurn(req.threadId, {
       id: randomUUID(),
@@ -392,7 +392,7 @@ class StudyBrainService {
     const cur = p.stepData[key] ?? { messages: [], notes: '' }
     const history = [...cur.messages]
     if (message?.trim()) history.push({ role: 'user', text: message.trim() })
-    const reply = await runStepChat(p, step, history, agentCliEngine)
+    const reply = await runStepChat(p, step, history, activeEngine())
     const stepData = { ...p.stepData, [key]: { ...cur, messages: [...history, { role: 'coach' as const, text: reply }] } }
     return brain.updateProject(id, { stepData })
   }
@@ -449,7 +449,7 @@ class StudyBrainService {
     const brain = await this.open()
     const p = await brain.getProject(id)
     if (!p) return { action, title: coachTitle(action), markdown: 'Open a project first.', blocked: true }
-    return runCoach(p, action, agentCliEngine)
+    return runCoach(p, action, activeEngine())
   }
 
   /** Capture a highlight into an existing page, or a new one when newTitle is
@@ -496,11 +496,11 @@ class StudyBrainService {
     const conceptTitles = concepts
       .filter((c) => !spec.courseCode || !c.courseCode || c.courseCode === spec.courseCode)
       .map((c) => c.title)
-    return generateQuiz(spec, { search: (q, l, c) => this.search(q, l, c), engine: agentCliEngine, conceptTitles })
+    return generateQuiz(spec, { search: (q, l, c) => this.search(q, l, c), engine: activeEngine(), conceptTitles })
   }
 
   async gradeQuizAnswer(question: { prompt: string; modelAnswer: string }, answer: string): Promise<QuizVerdict> {
-    return gradeFreeform(question, answer, agentCliEngine)
+    return gradeFreeform(question, answer, activeEngine())
   }
 
   /** Record a finished quiz and return the freshly-updated stats (so the UI can
