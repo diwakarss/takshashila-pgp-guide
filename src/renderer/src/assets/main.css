@@ -2145,12 +2145,12 @@ a.source-line-title:hover {
 .wizard {
   height: 100vh;
   display: flex;
-  align-items: center;
-  justify-content: center;
+  overflow-y: auto; /* tall steps (two connected harness cards) scroll… */
   background: var(--parchment);
   padding: 24px;
 }
 .wizard-card {
+  margin: auto; /* …short ones stay centered (overflow-safe centering) */
   width: min(560px, 100%);
   background: var(--surface);
   border: 1px solid var(--hairline);
