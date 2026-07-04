@@ -88,6 +88,13 @@ async function buildLibrary(): Promise<void> {
 const isDev = !app.isPackaged
 let devWindow: BrowserWindow | null = null
 
+// Dev harnesses run against an ISOLATED data dir (PGP_USERDATA=/tmp/…) so they
+// can never touch the student's real brain, and can run alongside the real app
+// (the single-instance lock is scoped per userData path).
+if (process.env['PGP_USERDATA']) {
+  app.setPath('userData', process.env['PGP_USERDATA'])
+}
+
 function createWindow(): void {
   const mainWindow = new BrowserWindow({
     width: 1100,
@@ -289,6 +296,35 @@ app.whenReady().then(() => {
 
   if (process.env['PGP_DEV_BUILD_LIBRARY']) {
     void buildLibrary().catch((e) => console.error('[lib] build failed:', e))
+  }
+
+  // Regression probe: on a mid-flow step, the coach must treat completed steps
+  // as BEHIND the student (never "we'll do that in step 2" when step 2 is done).
+  // PGP_DEV_CTXTEST=1 — throwaway project, self-cleaning.
+  if (process.env['PGP_DEV_CTXTEST']) {
+    void (async () => {
+      const p = await studyBrain.createPersonalProject('CTX probe (safe to delete)')
+      await studyBrain.updateProject(p.id, {
+        step: 3,
+        done: [0, 1, 2],
+        stepData: {
+          '0': { messages: [], notes: 'Problem: strait closure risks >50% of India’s helium imports (via Qatar); MRI + fabs exposed.' },
+          '1': { messages: [], notes: 'Verified: ~100% import dependence; Qatar >50%; ~30% global supply knocked out (J2 Sourcing); buffer days-not-months.' },
+          '2': { messages: [], notes: 'Angles: (a) price-spike mechanics, (b) substitution/recycling, (c) do-nothing baseline.' }
+        }
+      })
+      const r = await studyBrain.projectChat(
+        p.id,
+        3,
+        'Evidential grounding matters to me — can I hang real figures on each criterion, or does that come later?'
+      )
+      const ms = r?.stepData['3']?.messages ?? []
+      const reply = ms[ms.length - 1]?.text ?? ''
+      const defersToPast = /step 2\b[^.]*(later|will|park|future)|later work.*step 2|that comes later/i.test(reply)
+      console.log(`[ctx] reply (${defersToPast ? 'DEFERS TO PAST ✗' : 'progress-aware ✓'}):`, reply.slice(0, 500))
+      await studyBrain.deleteProject(p.id)
+      console.log('[ctx] cleaned up')
+    })().catch((e) => console.error('[ctx] failed:', e))
   }
 
   // Regression probe: an in-window navigation attempt must be blocked (and
