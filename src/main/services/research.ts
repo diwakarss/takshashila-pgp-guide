@@ -125,7 +125,7 @@ export type ResearchInput = { question: string; history: ResearchContext[] }
 export async function runResearch(input: ResearchInput, deps: ResearchDeps): Promise<ResearchReply> {
   const raw = await deps.engine.complete(buildResearchPrompt(input.question, input.history), {
     webSearch: true,
-    timeoutMs: 180_000
+    timeoutMs: 300_000
   })
   const parsed = parseResearch(raw)
   return {
@@ -281,7 +281,7 @@ export async function runLens(
 ): Promise<LensReply> {
   const raw = await deps.engine.complete(buildLensPrompt(input.question, input.lens, input.context), {
     webSearch: true,
-    timeoutMs: 180_000
+    timeoutMs: 300_000
   })
   const parsed = parseLens(raw, input.lens)
   if (!parsed) {

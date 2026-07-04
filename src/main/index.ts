@@ -343,6 +343,42 @@ app.whenReady().then(() => {
     void buildLibrary().catch((e) => console.error('[lib] build failed:', e))
   }
 
+  // Re-probe the timeout class: the research-heavy kickoffs (define, evidence)
+  // under the raised budgets. PGP_DEV_KICKTEST=codex — isolated dir only.
+  if (process.env['PGP_DEV_KICKTEST']) {
+    void (async () => {
+      if (!process.env['PGP_USERDATA']) {
+        console.error('[kick] REFUSING without PGP_USERDATA')
+        return
+      }
+      if (process.env['PGP_DEV_KICKTEST'] === 'codex') setSettings({ engineChoice: 'agent-cli:codex' })
+      console.log('[kick] engine =', activeEngine().capabilities.id)
+      const id = 'pp231-iran-demand-supply'
+      await studyBrain.deleteProject(id)
+      await studyBrain.openProject(id)
+      for (const step of (process.env['PGP_DEV_KICKSTEPS'] ?? '0,1').split(',').map(Number)) {
+        if (step === 1) {
+          const p = await studyBrain.openProject(id)
+          await studyBrain.updateProject(id, {
+            stepData: { ...p!.stepData, '0': { ...(p!.stepData['0'] ?? { messages: [] }), notes: 'Problem: strait closure risks >50% of India’s helium imports (via Qatar); MRI + fabs exposed.' } },
+            done: [0],
+            step: 1
+          })
+        }
+        const t0 = Date.now()
+        try {
+          const r = await studyBrain.projectChat(id, step)
+          const ms = r?.stepData[String(step)]?.messages ?? []
+          console.log(`[kick] step ${step + 1} kickoff OK in ${Math.round((Date.now() - t0) / 1000)}s → ${ms[ms.length - 1]?.text.slice(0, 150)}`)
+        } catch (e) {
+          console.error(`[kick] step ${step + 1} kickoff FAILED after ${Math.round((Date.now() - t0) / 1000)}s:`, e instanceof Error ? e.message : e)
+        }
+      }
+      console.log('[kick] done')
+      app.quit()
+    })().catch((e) => console.error('[kick] failed:', e))
+  }
+
   // Probe both harnesses: install/auth/account, and (PGP_DEV_ENGINES=codex) a
   // real completion through the Codex engine via the registry.
   if (process.env['PGP_DEV_ENGINES']) {
@@ -483,6 +519,14 @@ app.whenReady().then(() => {
   // on step 2; draft versions + a ghostwrite probe on step 8). Authorized reset.
   if (process.env['PGP_DEV_WALKTHROUGH']) {
     void (async () => {
+      // Hard guard: the walkthrough resets the assignment project, so it ONLY
+      // runs against an isolated data dir — never the student's real brain.
+      if (!process.env['PGP_USERDATA']) {
+        console.error('[walk] REFUSING to run without PGP_USERDATA (protects real student data)')
+        return
+      }
+      if (process.env['PGP_DEV_WALKTHROUGH'] === 'codex') setSettings({ engineChoice: 'agent-cli:codex' })
+      console.log('[walk] engine =', activeEngine().capabilities.id)
       const id = 'pp231-iran-demand-supply'
       await studyBrain.deleteProject(id)
       const first = await studyBrain.openProject(id)
@@ -580,6 +624,20 @@ app.whenReady().then(() => {
       console.log(
         `[walk] DONE: steps done=${JSON.stringify(fin?.done)} evidence=${fin?.evidence.length} drafts=${JSON.stringify(fin?.drafts.map((d) => ({ t: d.title, f: d.final })))}`
       )
+      // Structured-output smoke: research replies are strict JSON (synthesis +
+      // typed sources) — validate the active engine can produce parseable output.
+      try {
+        const { turn } = await studyBrain.research({ question: 'What is the RBI’s current repo rate and when was it last changed?' })
+        const a = turn.answer
+        if (a.kind === 'research') {
+          console.log(
+            `[walk] research-json: synthesis=${a.synthesis.length} chars, sources=${a.sources.length} (${a.sources.map((s) => s.type).join(',')}), followups=${a.followups.length}`
+          )
+        }
+      } catch (e) {
+        console.error('[walk] research-json failed:', e)
+      }
+      console.log('[walk] ALL DONE')
     })().catch((e) => console.error('[walk] failed:', e))
   }
 

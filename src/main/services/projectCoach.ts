@@ -100,7 +100,7 @@ const STEP_CHAT: Record<string, StepChatSpec> = {
   evidence: {
     web: true,
     kickoff:
-      'Do the research NOW, yourself. Based on the student’s step-1 definition, find the 4-8 key facts and figures that verify (or contradict) it. Report each finding as: the actual figure/fact, and its source (title + URL). Prefer primary/official sources. Flag anything that contradicts their definition. Then hand judgment back: ask which findings convince them, and tell them to save the keepers with "Add evidence" (paste the link + a title). Do NOT assign them reading homework.'
+      'Do the research NOW, yourself — but be FAST: a handful of well-sourced findings beats an exhaustive hunt. Based on the student’s step-1 definition, find the 4-6 MOST important facts/figures that verify (or contradict) it in ONE search pass (do not keep digging). Report each finding as: the actual figure/fact, and its source (title + URL). Prefer primary/official sources. Flag anything that contradicts their definition. Then hand judgment back: ask which findings convince them, and tell them to save the keepers with "Add evidence". They can always ask "Find more evidence" for another pass. Do NOT assign them reading homework.'
   },
   alternatives: {
     web: true,
@@ -218,7 +218,9 @@ export async function runStepChat(
 ): Promise<string> {
   const raw = await engine.complete(buildStepChatPrompt(project, step, history), {
     webSearch: stepUsesWeb(step) || history.length === 0,
-    timeoutMs: 180_000
+    // Codex spends far longer browsing than Claude — kickoffs (heavy research)
+    // get 6 min, follow-ups 4 (measured: Codex research kickoffs exceed 180s).
+    timeoutMs: history.length === 0 ? 360_000 : 240_000
   })
   return raw.trim()
 }
@@ -236,7 +238,7 @@ export async function runCoach(project: Project, action: CoachAction, engine: En
   }
   const markdown = await engine.complete(buildCoachPrompt(project, action), {
     webSearch: spec.web,
-    timeoutMs: spec.web ? 150_000 : 90_000
+    timeoutMs: spec.web ? 240_000 : 90_000
   })
   return { action, title: spec.title, markdown: markdown.trim() }
 }

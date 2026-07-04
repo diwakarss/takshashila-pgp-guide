@@ -48,6 +48,10 @@ export class CodexCliEngine implements Engine {
       '--ephemeral',
       '-s',
       'read-only',
+      // Medium deliberation: high-effort Codex browses far too long for a chat
+      // UX (measured: evidence research blew a 6-minute budget on high).
+      '-c',
+      'model_reasoning_effort=medium',
       '--color',
       'never',
       '-o',
