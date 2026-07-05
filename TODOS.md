@@ -125,3 +125,28 @@ mis-spawned .cmd shim would be a first-run dead end.
 **Where to start:** On a real Windows machine: fresh-machine wizard
 (PGP_DEV_FAKE_MISSING), install handoffs for all three paths, claude/codex
 detection + sign-in, one tutor ask per engine, Ollama pull + smoke.
+
+## Corpus distribution for students (delivery infra decision)
+
+**What:** "Get latest classes" syncs by `git pull` of the corpus clone — which
+works for JD (repo access) but students won't have credentials for the private
+pgp-brain repo. Decide + build the student-facing channel: Cloudflare Worker/R2
+mirror (gated), a GitHub deploy token baked into builds, or a public release
+bundle per week.
+
+**Why:** Weekly ingest (pgp-brain tools/ingest) now lands new classes in the
+repo automatically; the last mile to cohort machines is the only missing hop.
+The app side is ready: syncCorpus() falls back to import-only when the corpus
+dir isn't a git clone, so any mechanism that refreshes that folder works.
+
+**Where to start:** `studyBrain.syncCorpus()` (the pull step) and the
+corpusDir() comment — swap the pull for a fetch-from-mirror; scripts/sync-test.sh
+is the acceptance test to adapt.
+
+## Replace noisy live-capture webinars 1–2 with recording-based versions
+
+**What:** Clean recording-based transcripts + notes for "Introduction to
+Economic Reasoning" (staged in ~/.pgp-ingest/staging/, 13 files) vs the old
+widget capture (microeconomics-1-20260620*, missing first ~8 min, desktop OCR
+noise in slide blocks). Same question for market-dynamics vs
+microeconomics-i-class-2. Needs JD's call: replace (delete old slugs) or keep both.
