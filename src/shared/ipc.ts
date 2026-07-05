@@ -21,6 +21,8 @@ export const IPC = {
   corpusImport: 'corpus:import',
   /** main → renderer: per-file import progress. */
   corpusImportProgress: 'corpus:import:progress',
+  /** Pull the corpus repo + incrementally import changes (weekly class sync). */
+  corpusSync: 'corpus:sync',
   /** Semantic search over the brain; returns cited chunks. */
   brainSearch: 'brain:search',
   /** Courses present in the corpus, with lesson counts. */
@@ -128,9 +130,18 @@ export type ImportProgress = {
   index: number
   total: number
   chunks: number
+  /** True when the file was unchanged and left alone (incremental sync). */
+  skipped?: boolean
 }
 
-export type ImportResult = { files: number; pages: number; chunks: number }
+export type ImportResult = { files: number; pages: number; chunks: number; skipped: number }
+
+/** Result of a corpus sync: pull the corpus repo (when it is a git clone),
+ *  then incrementally import only what changed. */
+export type SyncResult = ImportResult & {
+  /** 'pulled' | 'up-to-date' | 'no-repo' (plain folder — import only). */
+  pull: string
+}
 
 export type SearchHit = {
   id: string

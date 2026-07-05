@@ -212,6 +212,15 @@ body.resizing-x {
   background: color-mix(in srgb, var(--danger) 8%, transparent);
   color: var(--danger);
 }
+.banner.ok {
+  background: color-mix(in srgb, var(--success) 10%, transparent);
+  color: var(--success);
+}
+.row.gap {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
 
 /* ── card / rows / pills ────────────────────────────────── */
 .card {

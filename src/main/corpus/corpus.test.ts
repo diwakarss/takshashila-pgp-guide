@@ -131,4 +131,37 @@ describe('importDirectory (integration: parse → chunk → embed → brain)', (
     expect(hits.length).toBeGreaterThan(0)
     expect(hits.every((h) => h.source === 'corpus')).toBe(true)
   })
+
+  it('incremental sync skips unchanged pages and imports only new/edited ones', async () => {
+    await writeFile(join(dir, 'micro-1.md'), SAMPLE)
+    await importDirectory({ dir, embedder: fakeEmbedder, writer: brain.corpusWriter })
+
+    // Second pass with the brain's hashes: nothing changed → everything skipped.
+    let result = await importDirectory({
+      dir,
+      embedder: fakeEmbedder,
+      writer: brain.corpusWriter,
+      knownHashes: await brain.corpusHashes()
+    })
+    expect(result.skipped).toBe(1)
+    expect(result.pages).toBe(0)
+
+    // A week later: one new class + one edited page → both import, unchanged logic intact.
+    await writeFile(
+      join(dir, 'trade-1.md'),
+      '---\ntype: study-notes\ntitle: Trade (Part 1/1)\n---\n\n## TL;DR\n\nComparative advantage: trade what you make cheapest.'
+    )
+    await writeFile(join(dir, 'micro-1.md'), SAMPLE.replace('fan regulator', 'dimmer'))
+    result = await importDirectory({
+      dir,
+      embedder: fakeEmbedder,
+      writer: brain.corpusWriter,
+      knownHashes: await brain.corpusHashes()
+    })
+    expect(result.skipped).toBe(0)
+    expect(result.pages).toBe(2)
+
+    const stats = await brain.stats()
+    expect(stats.bySource).toEqual({ corpus: 2 })
+  })
 })

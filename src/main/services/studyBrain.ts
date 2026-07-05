@@ -2,6 +2,7 @@ import { app } from 'electron'
 import { join, dirname } from 'node:path'
 import { existsSync, readdirSync, mkdirSync, copyFileSync, writeFileSync, readFileSync } from 'node:fs'
 import { randomUUID } from 'node:crypto'
+import { spawnSync } from 'node:child_process'
 import { Brain, type ConceptRecord } from '../brain/brain'
 import { nomicEmbedder } from '../embed/embedder'
 import { importDirectory, type ImportProgress, type ImportResult } from '../corpus/import'
@@ -39,6 +40,7 @@ import type {
   CoachAction,
   CoachResult,
   SearchHit,
+  SyncResult,
   Thread,
   ThreadDetail,
   WeakSpot
@@ -130,7 +132,11 @@ class StudyBrainService {
     return brain.stats()
   }
 
-  async importCorpus(onProgress: (p: ImportProgress) => void, limit?: number): Promise<ImportResult> {
+  async importCorpus(
+    onProgress: (p: ImportProgress) => void,
+    limit?: number,
+    incremental = false
+  ): Promise<ImportResult> {
     if (this.importing) throw new Error('import already in progress')
     this.importing = true
     try {
@@ -140,7 +146,8 @@ class StudyBrainService {
         embedder: nomicEmbedder,
         writer: brain.corpusWriter,
         onProgress,
-        limit
+        limit,
+        knownHashes: incremental ? await brain.corpusHashes() : undefined
       })
       // Load any shipped illustration bundle so students get illustrations for
       // free (idempotent; a no-op when there's no bundle, e.g. on the builder).
@@ -154,6 +161,25 @@ class StudyBrainService {
     } finally {
       this.importing = false
     }
+  }
+
+  /**
+   * Weekly class sync: fast-forward the corpus repo (when the corpus dir sits
+   * inside a git clone), then import incrementally — unchanged pages are
+   * skipped, so only the week's new classes get embedded.
+   */
+  async syncCorpus(onProgress: (p: ImportProgress) => void): Promise<SyncResult> {
+    const repo = dirname(this.corpusDir())
+    let pull = 'no-repo'
+    if (existsSync(join(repo, '.git'))) {
+      const res = spawnSync('git', ['-C', repo, 'pull', '--ff-only'], { encoding: 'utf8', timeout: 120_000 })
+      if (res.status !== 0) {
+        throw new Error(`corpus pull failed: ${(res.stderr || res.stdout || '').trim().slice(0, 300)}`)
+      }
+      pull = /already up to date/i.test(res.stdout) ? 'up-to-date' : 'pulled'
+    }
+    const result = await this.importCorpus(onProgress, undefined, true)
+    return { ...result, pull }
   }
 
   async courses(): Promise<CourseSummary[]> {

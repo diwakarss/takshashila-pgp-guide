@@ -11,9 +11,10 @@ export type ImportProgress = {
   index: number
   total: number
   chunks: number
+  skipped?: boolean
 }
 
-export type ImportResult = { files: number; pages: number; chunks: number }
+export type ImportResult = { files: number; pages: number; chunks: number; skipped: number }
 
 /**
  * Import a directory of gbrain markdown files into the brain through a
@@ -28,8 +29,11 @@ export async function importDirectory(opts: {
   onProgress?: (p: ImportProgress) => void
   /** Dev/diagnostic: import at most this many files. */
   limit?: number
+  /** slug → content_hash of pages already in the brain; matching files are
+   *  skipped without embedding, making re-imports/weekly syncs incremental. */
+  knownHashes?: Map<string, string>
 }): Promise<ImportResult> {
-  const { dir, embedder, writer, onProgress, limit } = opts
+  const { dir, embedder, writer, onProgress, limit, knownHashes } = opts
   const all = await readdir(dir)
   let files = all
     .filter((f) => f.toLowerCase().endsWith('.md') && f.toLowerCase() !== 'readme.md')
@@ -38,11 +42,17 @@ export async function importDirectory(opts: {
 
   let pages = 0
   let totalChunks = 0
+  let skipped = 0
 
   for (let i = 0; i < files.length; i++) {
     const file = files[i]
     const raw = await readFile(join(dir, file), 'utf8')
     const page = parsePage(file, raw)
+    if (knownHashes && page.contentHash && knownHashes.get(page.slug) === page.contentHash) {
+      skipped++
+      onProgress?.({ file, index: i + 1, total: files.length, chunks: 0, skipped: true })
+      continue
+    }
     const chunks = chunkBody(page.body)
 
     if (chunks.length > 0) {
@@ -75,5 +85,5 @@ export async function importDirectory(opts: {
     onProgress?.({ file, index: i + 1, total: files.length, chunks: chunks.length })
   }
 
-  return { files: files.length, pages, chunks: totalChunks }
+  return { files: files.length, pages, chunks: totalChunks, skipped }
 }

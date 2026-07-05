@@ -209,6 +209,13 @@ function registerIpc(): void {
     })
   })
 
+  // Weekly sync: pull the corpus repo, then import only what changed.
+  ipcMain.handle(IPC.corpusSync, async (event) => {
+    return studyBrain.syncCorpus((p) => {
+      if (!event.sender.isDestroyed()) event.sender.send(IPC.corpusImportProgress, p)
+    })
+  })
+
   ipcMain.handle(IPC.engineStatus, async () => {
     const engine = activeEngine()
     const caps = engine.capabilities
@@ -498,6 +505,52 @@ app.whenReady().then(() => {
       console.log('[kick] done')
       app.quit()
     })().catch((e) => console.error('[kick] failed:', e))
+  }
+
+  // Probe weekly corpus delivery to a RUNNING app. PGP_DEV_SYNCTEST=1 with
+  // PGP_USERDATA + PGP_CORPUS_DIR pointing at a test clone: baseline import,
+  // signal ready, wait for the driver to land new classes on origin, then
+  // syncCorpus must pull + import only the delta and make it searchable.
+  if (process.env['PGP_DEV_SYNCTEST']) {
+    void (async () => {
+      if (!process.env['PGP_USERDATA'] || !process.env['PGP_CORPUS_DIR']) {
+        console.error('[sync] REFUSING without PGP_USERDATA + PGP_CORPUS_DIR')
+        app.quit()
+        return
+      }
+      const { writeFileSync, existsSync, mkdirSync } = await import('node:fs')
+      const { join } = await import('node:path')
+      const wait = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms))
+      const shake = join(process.env['PGP_USERDATA'], 'synctest')
+      mkdirSync(shake, { recursive: true })
+
+      const base = await studyBrain.importCorpus(() => {})
+      console.log(`[sync] baseline import: ${base.pages} pages`)
+      writeFileSync(join(shake, 'ready'), String(base.pages))
+
+      let waited = 0
+      while (!existsSync(join(shake, 'pushed')) && waited < 120_000) {
+        await wait(1000)
+        waited += 1000
+      }
+      if (!existsSync(join(shake, 'pushed'))) {
+        console.error('[sync] FAIL ✗ driver never pushed')
+        app.quit()
+        return
+      }
+
+      const r = await studyBrain.syncCorpus(() => {})
+      console.log(`[sync] pull=${r.pull} imported=${r.pages} skipped=${r.skipped}`)
+      const expect = process.env['PGP_SYNC_EXPECT'] ?? 'comparative advantage'
+      const hits = await studyBrain.search(expect, 3)
+      const found = hits.some((h) => !(process.env['PGP_SYNC_NEWSLUG'] ?? '') || h.slug.includes(process.env['PGP_SYNC_NEWSLUG'] ?? ''))
+      const ok = r.pull === 'pulled' && r.pages > 0 && r.skipped === base.pages && hits.length > 0 && found
+      console.log(`[sync] ${ok ? 'PASS ✓ (delta pulled, unchanged skipped, new class searchable)' : 'FAIL ✗'}`)
+      app.quit()
+    })().catch((e) => {
+      console.error('[sync] failed:', e)
+      app.quit()
+    })
   }
 
   // Probe capture source-linkage: a selection that stops short of the [n]

@@ -141,15 +141,39 @@ function CourseLibrary(props: { status: SystemStatus }): JSX.Element {
   const [busy, setBusy] = useState(false)
   const [progress, setProgress] = useState<ImportProgress | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [synced, setSynced] = useState<string | null>(null)
 
-  const run = async (): Promise<void> => {
+  const start = (): ((p: ImportProgress) => void) => {
     setBusy(true)
     setError(null)
     setProgress(null)
-    const off = window.pgp.onImportProgress((p) => setProgress(p))
+    setSynced(null)
+    return setProgress
+  }
+
+  const run = async (): Promise<void> => {
+    const off = window.pgp.onImportProgress(start())
     try {
       await window.pgp.importCorpus()
       await status.refresh()
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e))
+    } finally {
+      off()
+      setBusy(false)
+    }
+  }
+
+  const sync = async (): Promise<void> => {
+    const off = window.pgp.onImportProgress(start())
+    try {
+      const r = await window.pgp.syncCorpus()
+      await status.refresh()
+      setSynced(
+        r.pages > 0
+          ? `${r.pages} new or updated lesson${r.pages === 1 ? '' : 's'} added.`
+          : 'You already have the latest classes.'
+      )
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e))
     } finally {
@@ -189,16 +213,26 @@ function CourseLibrary(props: { status: SystemStatus }): JSX.Element {
       {busy && !progress && <p className="muted small">Starting… (loading the embedder)</p>}
 
       {!busy && (
-        <button className="btn primary" disabled={!corpus?.hasLocalCorpus} onClick={run}>
-          {already ? 'Re-import lessons' : `Import ${corpus?.fileCount ?? ''} lessons`}
-        </button>
+        <div className="row gap">
+          {already && (
+            <button className="btn primary" disabled={!corpus?.hasLocalCorpus} onClick={sync}>
+              Get latest classes
+            </button>
+          )}
+          <button className={already ? 'btn' : 'btn primary'} disabled={!corpus?.hasLocalCorpus} onClick={run}>
+            {already ? 'Re-import everything' : `Import ${corpus?.fileCount ?? ''} lessons`}
+          </button>
+        </div>
       )}
       {!busy && (
         <p className="muted small">
-          Imports run on your machine the first time (a few minutes), then your brain remembers them.
+          {already
+            ? 'Get latest classes checks for the week’s new recordings and adds only what changed.'
+            : 'Imports run on your machine the first time (a few minutes), then your brain remembers them.'}
         </p>
       )}
-      {error && <p className="banner danger">Import failed: {error}</p>}
+      {synced && <p className="banner ok">{synced}</p>}
+      {error && <p className="banner danger">Sync failed: {error}</p>}
     </section>
   )
 }

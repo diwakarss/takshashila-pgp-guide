@@ -691,6 +691,14 @@ export class Brain {
     return updated
   }
 
+  /** slug → content_hash for corpus pages, for incremental (skip-unchanged) imports. */
+  async corpusHashes(): Promise<Map<string, string>> {
+    const res = await this.db.query<{ slug: string; content_hash: string | null }>(
+      `SELECT slug, content_hash FROM pages WHERE source = 'corpus' AND content_hash IS NOT NULL`
+    )
+    return new Map(res.rows.filter((r) => r.content_hash).map((r) => [r.slug, r.content_hash as string]))
+  }
+
   async stats(): Promise<{ pages: number; chunks: number; bySource: Record<string, number> }> {
     const pages = await this.db.query<{ count: number }>(`SELECT count(*)::int AS count FROM pages`)
     const chunks = await this.db.query<{ count: number }>(`SELECT count(*)::int AS count FROM chunks`)
