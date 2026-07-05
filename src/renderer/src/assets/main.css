@@ -148,6 +148,30 @@ body.resizing-x {
 .status-pill .dot.off {
   background: var(--danger);
 }
+/* "New classes available" — the one actionable pill in the footer. */
+button.update-pill {
+  border: 1px solid color-mix(in srgb, var(--brand) 35%, transparent);
+  background: color-mix(in srgb, var(--brand) 10%, transparent);
+  color: var(--brand);
+  border-radius: 999px;
+  cursor: pointer;
+  font-weight: 600;
+}
+button.update-pill:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--brand) 18%, transparent);
+}
+button.update-pill:disabled {
+  cursor: default;
+  opacity: 0.8;
+}
+.update-pill .spin {
+  animation: pill-spin 1s linear infinite;
+}
+@keyframes pill-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
 
 /* ── main column: top bar + content ─────────────────────── */
 .main-col {

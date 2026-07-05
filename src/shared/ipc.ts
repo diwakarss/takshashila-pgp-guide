@@ -23,6 +23,8 @@ export const IPC = {
   corpusImportProgress: 'corpus:import:progress',
   /** Pull the corpus repo + incrementally import changes (weekly class sync). */
   corpusSync: 'corpus:sync',
+  /** Cheap "new classes available?" check for the sidebar badge (no writes). */
+  corpusUpdates: 'corpus:updates',
   /** Semantic search over the brain; returns cited chunks. */
   brainSearch: 'brain:search',
   /** Courses present in the corpus, with lesson counts. */
@@ -142,6 +144,10 @@ export type SyncResult = ImportResult & {
   /** 'pulled' | 'up-to-date' | 'no-repo' (plain folder — import only). */
   pull: string
 }
+
+/** "New classes available?" — local files not yet in the brain, and commits
+ *  the corpus clone is behind its remote (0 when offline or not a clone). */
+export type CorpusUpdates = { pending: number; behind: number }
 
 export type SearchHit = {
   id: string

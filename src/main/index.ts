@@ -215,6 +215,7 @@ function registerIpc(): void {
       if (!event.sender.isDestroyed()) event.sender.send(IPC.corpusImportProgress, p)
     })
   })
+  ipcMain.handle(IPC.corpusUpdates, () => studyBrain.corpusUpdates())
 
   ipcMain.handle(IPC.engineStatus, async () => {
     const engine = activeEngine()
@@ -539,13 +540,24 @@ app.whenReady().then(() => {
         return
       }
 
+      // The sidebar badge's check must see the update before the sync…
+      const before = await studyBrain.corpusUpdates()
+      console.log(`[sync] updates before: pending=${before.pending} behind=${before.behind}`)
+
       const r = await studyBrain.syncCorpus(() => {})
       console.log(`[sync] pull=${r.pull} imported=${r.pages} skipped=${r.skipped}`)
       const expect = process.env['PGP_SYNC_EXPECT'] ?? 'comparative advantage'
       const hits = await studyBrain.search(expect, 3)
       const found = hits.some((h) => !(process.env['PGP_SYNC_NEWSLUG'] ?? '') || h.slug.includes(process.env['PGP_SYNC_NEWSLUG'] ?? ''))
-      const ok = r.pull === 'pulled' && r.pages > 0 && r.skipped === base.pages && hits.length > 0 && found
-      console.log(`[sync] ${ok ? 'PASS ✓ (delta pulled, unchanged skipped, new class searchable)' : 'FAIL ✗'}`)
+
+      // …and report all-clear after it.
+      const after = await studyBrain.corpusUpdates()
+      console.log(`[sync] updates after: pending=${after.pending} behind=${after.behind}`)
+
+      const ok =
+        r.pull === 'pulled' && r.pages > 0 && r.skipped === base.pages && hits.length > 0 && found &&
+        before.behind > 0 && after.pending === 0 && after.behind === 0
+      console.log(`[sync] ${ok ? 'PASS ✓ (badge sees update, delta pulled, unchanged skipped, new class searchable, badge clears)' : 'FAIL ✗'}`)
       app.quit()
     })().catch((e) => {
       console.error('[sync] failed:', e)

@@ -6,6 +6,7 @@ import { spawnSync } from 'node:child_process'
 import { Brain, type ConceptRecord } from '../brain/brain'
 import { nomicEmbedder } from '../embed/embedder'
 import { importDirectory, type ImportProgress, type ImportResult } from '../corpus/import'
+import { parsePage } from '../corpus/parse'
 import { resolveCourse } from '../corpus/course'
 import { imageEngine } from '../illustrate/imageEngine'
 import { activeEngine } from '../engine/registry'
@@ -39,6 +40,7 @@ import type {
   ProjectsOverview,
   CoachAction,
   CoachResult,
+  CorpusUpdates,
   SearchHit,
   SyncResult,
   Thread,
@@ -161,6 +163,39 @@ class StudyBrainService {
     } finally {
       this.importing = false
     }
+  }
+
+  /**
+   * Are new classes available? Cheap check for the sidebar badge: fetch the
+   * corpus repo (when it's a clone) and count commits behind, plus count local
+   * corpus files whose content isn't in the brain yet. No embedding, no writes.
+   */
+  async corpusUpdates(): Promise<CorpusUpdates> {
+    const dir = this.corpusDir()
+    if (!existsSync(dir)) return { pending: 0, behind: 0 }
+
+    let behind = 0
+    const repo = dirname(dir)
+    if (existsSync(join(repo, '.git'))) {
+      // Network fetch may fail offline — the badge just falls back to local-only.
+      const fetch = spawnSync('git', ['-C', repo, 'fetch', '--quiet'], { encoding: 'utf8', timeout: 20_000 })
+      if (fetch.status === 0) {
+        const count = spawnSync('git', ['-C', repo, 'rev-list', '--count', 'HEAD..@{u}'], {
+          encoding: 'utf8',
+          timeout: 10_000
+        })
+        if (count.status === 0) behind = Number(count.stdout.trim()) || 0
+      }
+    }
+
+    const known = await (await this.open()).corpusHashes()
+    let pending = 0
+    for (const f of readdirSync(dir)) {
+      if (!f.toLowerCase().endsWith('.md') || f.toLowerCase() === 'readme.md') continue
+      const page = parsePage(f, readFileSync(join(dir, f), 'utf8'))
+      if (known.get(page.slug) !== page.contentHash) pending++
+    }
+    return { pending, behind }
   }
 
   /**

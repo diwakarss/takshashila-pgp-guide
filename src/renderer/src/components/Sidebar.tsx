@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type MouseEvent as ReactMouseEvent } from 'react'
-import { Settings as SettingsIcon, Plus, PanelLeftClose, PanelLeft, Flame, Search } from 'lucide-react'
+import { Settings as SettingsIcon, Plus, PanelLeftClose, PanelLeft, Flame, Search, Download, RefreshCw } from 'lucide-react'
 import { NAV_TABS, type TabId } from '../tabs'
 import type {
   BrainStats,
@@ -20,6 +20,7 @@ export function Sidebar(props: {
   onNavigate: (t: TabId) => void
   engine: EngineStatus | null
   stats: BrainStats | null
+  refreshStats: () => Promise<void>
   openThreadId: string | null
   threadsVersion: number
   quizStatsVersion: number
@@ -38,6 +39,7 @@ export function Sidebar(props: {
     onNavigate,
     engine,
     stats,
+    refreshStats,
     openThreadId,
     threadsVersion,
     quizStatsVersion,
@@ -64,6 +66,44 @@ export function Sidebar(props: {
   const [nbPages, setNbPages] = useState<NotebookPageSummary[]>([])
   const [projects, setProjects] = useState<ProjectsOverview | null>(null)
   const [query, setQuery] = useState('')
+  // "New classes available" badge: checked shortly after launch and then every
+  // half hour; clicking the pill runs the sync right here.
+  const [updates, setUpdates] = useState<number>(0)
+  const [syncState, setSyncState] = useState<'idle' | 'busy' | 'done'>('idle')
+
+  useEffect(() => {
+    let alive = true
+    const check = (): void => {
+      void window.pgp
+        .corpusUpdates()
+        .then((u) => {
+          if (alive) setUpdates(u.pending + u.behind)
+        })
+        .catch(() => {})
+    }
+    const first = setTimeout(check, 4000)
+    const every = setInterval(check, 30 * 60 * 1000)
+    return () => {
+      alive = false
+      clearTimeout(first)
+      clearInterval(every)
+    }
+  }, [])
+
+  const syncNow = async (): Promise<void> => {
+    if (syncState === 'busy') return
+    setSyncState('busy')
+    try {
+      await window.pgp.syncCorpus()
+      await refreshStats()
+      const u = await window.pgp.corpusUpdates()
+      setUpdates(u.pending + u.behind)
+      setSyncState('done')
+      setTimeout(() => setSyncState('idle'), 4000)
+    } catch {
+      setSyncState('idle')
+    }
+  }
 
   const isThreadTab = active === 'tutor' || active === 'research'
   const showQuiz = active === 'quiz'
@@ -278,6 +318,30 @@ export function Sidebar(props: {
               <span className={`dot ${(stats?.chunks ?? 0) > 0 ? 'ok' : 'off'}`} />
               {stats ? `${stats.pages} lessons` : '…'}
             </div>
+            {(updates > 0 || syncState !== 'idle') && (
+              <button
+                className="status-pill update-pill"
+                title={
+                  syncState === 'busy'
+                    ? 'Adding the new classes to your brain…'
+                    : `${updates} new class page${updates === 1 ? '' : 's'} available — click to add`
+                }
+                disabled={syncState === 'busy'}
+                onClick={syncNow}
+              >
+                {syncState === 'busy' ? (
+                  <>
+                    <RefreshCw size={12} className="spin" /> Adding…
+                  </>
+                ) : syncState === 'done' ? (
+                  <>✓ Up to date</>
+                ) : (
+                  <>
+                    <Download size={12} /> {updates} new
+                  </>
+                )}
+              </button>
+            )}
           </>
         )}
         <button

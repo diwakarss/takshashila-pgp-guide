@@ -89,6 +89,7 @@ export function App(): JSX.Element {
         onNavigate={setTab}
         engine={status.engine}
         stats={status.stats}
+        refreshStats={status.refresh}
         openThreadId={activeOpenThreadId}
         threadsVersion={threadsVersion}
         quizStatsVersion={quizStatsVersion}
