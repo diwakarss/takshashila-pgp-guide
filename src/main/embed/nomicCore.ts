@@ -22,12 +22,21 @@ export async function warmupCore(): Promise<void> {
   await get()
 }
 
+// One inference call embeds a single padded batch tensor, so its memory cost
+// scales with batch size × longest text. A full-book page can arrive as 1500+
+// chunks at once — unbatched, that's a multi-GB tensor and the OS kills the
+// process (exit code null). Small fixed batches keep memory flat.
+const BATCH = 16
+
 /** Embed already-prefixed texts with the pinned pooling/normalization. */
 export async function embedCore(texts: string[]): Promise<number[][]> {
   if (texts.length === 0) return []
   const p = await get()
-  const out = await p(texts, { pooling: POOLING, normalize: NORMALIZE })
-  const arr = out.tolist() as number[][]
+  const arr: number[][] = []
+  for (let i = 0; i < texts.length; i += BATCH) {
+    const out = await p(texts.slice(i, i + BATCH), { pooling: POOLING, normalize: NORMALIZE })
+    arr.push(...(out.tolist() as number[][]))
+  }
   for (const v of arr) {
     if (v.length !== EMBED_DIM) throw new Error(`embedder produced ${v.length} dims, expected ${EMBED_DIM}`)
   }

@@ -8,11 +8,20 @@
 
 export type Course = { code: string; name: string }
 
-export const COURSE_MICRO: Course = { code: 'PP231', name: 'Microeconomics-I' }
+export const COURSE_MICRO: Course = { code: 'PP231', name: 'Microeconomics I' }
 export const COURSE_FUND: Course = { code: 'PP221', name: 'Fundamentals of Public Policy' }
 export const COURSE_GENERAL: Course = { code: 'GENERAL', name: 'Programme essentials' }
 
 export const COURSES: Course[] = [COURSE_MICRO, COURSE_FUND, COURSE_GENERAL]
+
+// One display name per code, no matter which path resolved it — frontmatter
+// and the slug heuristic must agree or the courses list shows duplicates
+// (seen live: "Microeconomics I" and "Microeconomics-I" as two courses).
+const CANONICAL_NAMES: Record<string, string> = {
+  PP231: 'Microeconomics I',
+  PP221: 'Fundamentals of Public Policy',
+  PP223: 'International Relations and Foreign Affairs'
+}
 
 const MICRO_RE =
   /microeconom|pp231|economic-reasoning|price-value|price-and-cost|law-of-demand|\bdemand\b|market-equilibrium|comparative-advantage|\btrade\b|government-intervention-in-markets|transaction-cost|elasticit|\bsupply\b|opportunity-cost|incentive/
@@ -27,14 +36,23 @@ export function classifyCourse(slug: string, title?: string | null): Course {
   return COURSE_GENERAL
 }
 
-/** Parse an explicit frontmatter course field like "PP221: Fundamentals of
- *  Public Policy" (the corpus now ships these). Null when absent/unparseable. */
+/** Parse an explicit frontmatter course field. Accepts coded courses
+ *  ("PP221: Fundamentals of Public Policy") and code-less series names
+ *  ("Policy Headlines", "Orientation") — those become their own course with a
+ *  derived code. Legacy space tags like "pgp10" fall through to the slug
+ *  heuristic. Null when absent/unparseable. */
 export function parseCourseField(v: unknown): Course | null {
   if (typeof v !== 'string' || !v.trim()) return null
-  const m = v.trim().match(/^([A-Z]{2,4}\s?\d{2,4})\s*[:\-–—]\s*(.+)$/)
-  if (m) return { code: m[1].replace(/\s+/g, ''), name: m[2].trim() }
-  const known = COURSES.find((c) => c.code.toLowerCase() === v.trim().toLowerCase())
-  return known ?? null
+  const s = v.trim()
+  const m = s.match(/^([A-Z]{2,4}\s?\d{2,4})\s*[:\-–—]\s*(.+)$/)
+  if (m) {
+    const code = m[1].replace(/\s+/g, '')
+    return { code, name: CANONICAL_NAMES[code] ?? m[2].trim() }
+  }
+  const known = COURSES.find((c) => c.code.toLowerCase() === s.toLowerCase())
+  if (known) return known
+  if (/^pgp/i.test(s) || s.length < 4) return null
+  return { code: s.toUpperCase().replace(/[^A-Z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 20), name: s }
 }
 
 /** The course for a page: explicit frontmatter wins; the slug heuristic is the

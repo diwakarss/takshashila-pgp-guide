@@ -40,10 +40,23 @@ describe('parseCourseField / resolveCourse', () => {
     })
     expect(parseCourseField('PP231: Microeconomics-I')?.code).toBe('PP231')
   })
-  it('rejects junk', () => {
+  it('rejects junk but accepts code-less series names', () => {
     expect(parseCourseField('')).toBeNull()
     expect(parseCourseField(42)).toBeNull()
-    expect(parseCourseField('just words')).toBeNull()
+    // legacy space tags fall through to the slug heuristic
+    expect(parseCourseField('pgp10')).toBeNull()
+    expect(parseCourseField('pgp')).toBeNull()
+    // code-less series ("Policy Headlines", "Orientation") become their own course
+    expect(parseCourseField('Policy Headlines')).toEqual({ code: 'POLICY-HEADLINES', name: 'Policy Headlines' })
+    expect(parseCourseField('Orientation')?.code).toBe('ORIENTATION')
+  })
+  it('canonicalizes the display name per code so both resolve paths agree', () => {
+    expect(parseCourseField('PP231: Microeconomics-I')?.name).toBe('Microeconomics I')
+    expect(parseCourseField('PP231: Microeconomics I')?.name).toBe('Microeconomics I')
+    expect(classifyCourse('microeconomics-1-20260620-pt1').name).toBe('Microeconomics I')
+    expect(parseCourseField('PP223: International Relations And Foreign Affairs')?.name).toBe(
+      'International Relations and Foreign Affairs'
+    )
   })
   it('frontmatter wins over the slug heuristic; heuristic is the fallback', () => {
     expect(resolveCourse({ course: 'PP221: Fundamentals of Public Policy' }, 'pgp-reading-demand-curves').code).toBe('PP221')
