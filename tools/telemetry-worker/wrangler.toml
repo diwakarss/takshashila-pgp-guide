@@ -1,0 +1,9 @@
+name = "pgp-telemetry"
+main = "worker.js"
+compatibility_date = "2026-07-01"
+
+# Create once with:  npx wrangler kv namespace create PINGS
+# then paste the returned id below.
+[[kv_namespaces]]
+binding = "PINGS"
+id = "REPLACE_WITH_KV_NAMESPACE_ID"

@@ -4,6 +4,7 @@ import { copyFileSync, mkdirSync, writeFileSync, readFileSync } from 'node:fs'
 import { IPC, type AppInfo } from '../shared/ipc'
 import { studyBrain } from './services/studyBrain'
 import { setSettings, publicSettings } from './services/settings'
+import { ping } from './services/telemetry'
 import { saveApiKey, clearApiKey, maskedApiKey } from './services/apiKeys'
 import { agentCliEngine } from './engine/agentCli'
 import { activeEngine, ENGINES, engineById } from './engine/registry'
@@ -467,6 +468,7 @@ app.on('second-instance', () => {
 app.whenReady().then(() => {
   registerIpc()
   createWindow()
+  ping('launch') // anonymous, opt-in (settings.metrics), no-op in dev without PGP_TELEMETRY_URL
 
   if (process.env['PGP_DEV_BUILD_LIBRARY']) {
     void buildLibrary().catch((e) => console.error('[lib] build failed:', e))

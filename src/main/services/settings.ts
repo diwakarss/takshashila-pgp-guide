@@ -15,9 +15,10 @@ export type AppSettings = {
   localModel: string | null // ollama model tag
 }
 
-/** Stored on disk (main-process only): settings + encrypted API keys. The keys
- *  never cross IPC — the renderer sees masked values via ai:status. */
-export type StoredSettings = AppSettings & { apiKeys: Record<string, string> }
+/** Stored on disk (main-process only): settings + encrypted API keys + the
+ *  anonymous telemetry install id. None of these cross IPC — the renderer
+ *  sees masked key values via ai:status and never needs the anon id. */
+export type StoredSettings = AppSettings & { apiKeys: Record<string, string>; anonId?: string }
 
 const DEFAULTS: StoredSettings = {
   onboarded: false,
@@ -50,8 +51,9 @@ export function setSettings(patch: Partial<StoredSettings>): StoredSettings {
   return next
 }
 
-/** The renderer-safe view: everything except the (encrypted) API keys. */
+/** The renderer-safe view: everything except the (encrypted) API keys and
+ *  the telemetry install id. */
 export function publicSettings(): AppSettings {
-  const { apiKeys: _apiKeys, ...rest } = getSettings()
+  const { apiKeys: _apiKeys, anonId: _anonId, ...rest } = getSettings()
   return rest
 }
