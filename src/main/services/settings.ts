@@ -13,6 +13,7 @@ export type AppSettings = {
   claudeBin: string | null // executable path overrides (Settings)
   codexBin: string | null
   localModel: string | null // ollama model tag
+  corpusKey: string | null // cohort passphrase for the corpus delivery server
 }
 
 /** Stored on disk (main-process only): settings + encrypted API keys + the
@@ -27,6 +28,7 @@ const DEFAULTS: StoredSettings = {
   claudeBin: null,
   codexBin: null,
   localModel: null,
+  corpusKey: null,
   apiKeys: {}
 }
 

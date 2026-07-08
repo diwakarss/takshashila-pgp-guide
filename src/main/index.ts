@@ -510,6 +510,36 @@ app.whenReady().then(() => {
     })().catch((e) => console.error('[kick] failed:', e))
   }
 
+  // Probe the STUDENT delivery path end-to-end against the real corpus
+  // Worker. PGP_DEV_REMOTETEST=1 with PGP_USERDATA + PGP_CORPUS_DIR pointing
+  // into the isolated dir and corpusKey pre-seeded in its settings.json:
+  // syncCorpus must download the published corpus, import it, and make a
+  // known class searchable. (Slow: embeds the whole corpus once.)
+  if (process.env['PGP_DEV_REMOTETEST']) {
+    void (async () => {
+      if (!process.env['PGP_USERDATA'] || !process.env['PGP_CORPUS_DIR']) {
+        console.error('[remote] REFUSING without PGP_USERDATA + PGP_CORPUS_DIR')
+        app.quit()
+        return
+      }
+      const t0 = Date.now()
+      const r = await studyBrain.syncCorpus((p) => {
+        if (p.index % 50 === 0) console.log(`[remote] ${p.file} ${p.index}/${p.total}`)
+      })
+      console.log(`[remote] pull=${r.pull} pages=${r.pages} skipped=${r.skipped} in ${Math.round((Date.now() - t0) / 1000)}s`)
+      const hits = await studyBrain.search('delimitation reapportionment of parliamentary seats', 3)
+      const found = hits.some((h) => h.slug.includes('delimitation'))
+      const s = await studyBrain.stats()
+      console.log(`[remote] brain: ${s.pages} pages; delimitation searchable: ${found}`)
+      const pullOk = r.pull === 'pulled' || r.pull === 'up-to-date' // resume runs may have a current mirror
+      console.log(`[remote] ${pullOk && r.pages > 0 && found ? 'PASS ✓ (student flow: download → import → searchable)' : 'FAIL ✗'}`)
+      app.quit()
+    })().catch((e) => {
+      console.error('[remote] failed:', e)
+      app.quit()
+    })
+  }
+
   // Probe weekly corpus delivery to a RUNNING app. PGP_DEV_SYNCTEST=1 with
   // PGP_USERDATA + PGP_CORPUS_DIR pointing at a test clone: baseline import,
   // signal ready, wait for the driver to land new classes on origin, then

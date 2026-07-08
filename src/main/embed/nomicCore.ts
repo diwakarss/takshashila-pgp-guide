@@ -13,7 +13,15 @@ function get(): Promise<FeatureExtractionPipeline> {
     // Default device (onnxruntime-node, native CPU). This module only runs in a
     // real Node process (system node subprocess / Vitest), never Electron's
     // bundled Node — onnxruntime's native addon SIGTRAPs there. See embedder.ts.
-    pipe = pipeline('feature-extraction', EMBED_MODEL_ID, { dtype: EMBED_DTYPE }) as Promise<FeatureExtractionPipeline>
+    //
+    // ORT's memory arena caches an allocation per distinct padded batch shape
+    // and never frees — over a corpus import that's gigabytes of dead buffers
+    // until the OS kills the process. Disable it (and memory-pattern caching);
+    // buffers get freed per inference at a small speed cost.
+    pipe = pipeline('feature-extraction', EMBED_MODEL_ID, {
+      dtype: EMBED_DTYPE,
+      session_options: { enableCpuMemArena: false, enableMemPattern: false }
+    } as object) as Promise<FeatureExtractionPipeline>
   }
   return pipe
 }
@@ -26,7 +34,7 @@ export async function warmupCore(): Promise<void> {
 // scales with batch size × longest text. A full-book page can arrive as 1500+
 // chunks at once — unbatched, that's a multi-GB tensor and the OS kills the
 // process (exit code null). Small fixed batches keep memory flat.
-const BATCH = 16
+const BATCH = 8
 
 /** Embed already-prefixed texts with the pinned pooling/normalization. */
 export async function embedCore(texts: string[]): Promise<number[][]> {

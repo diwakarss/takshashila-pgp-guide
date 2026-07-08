@@ -12,6 +12,12 @@ export type Chunk = { ordinal: number; text: string }
 const TARGET_CHARS = 1200 // ~300 tokens; nomic handles long context comfortably
 const OVERLAP_CHARS = 150
 const MIN_CHARS = 60 // drop trivially short fragments
+// No chunk may exceed this, ever. Book PDFs extract as one giant "paragraph"
+// (single-newline lines, no blank lines), and an over-long chunk in an
+// embedding batch blows attention memory up quadratically — the embedder
+// child dies. Kept close to TARGET so book chunks embed as cheaply as normal
+// ones. Anything over the cap is force-split at sentence/line breaks.
+const HARD_MAX_CHARS = 1600
 
 type Section = { headingTrail: string; body: string }
 
@@ -42,9 +48,28 @@ function splitIntoSections(body: string): Section[] {
   return sections
 }
 
+// Force an over-long run of text under the cap: cut at the last sentence end
+// (or line break, or space) before the limit, with a little overlap carried
+// into the next piece.
+function hardSplit(text: string): string[] {
+  if (text.length <= HARD_MAX_CHARS) return [text]
+  const out: string[] = []
+  let rest = text
+  while (rest.length > HARD_MAX_CHARS) {
+    const window = rest.slice(0, HARD_MAX_CHARS)
+    let cut = Math.max(window.lastIndexOf('. '), window.lastIndexOf('.\n'), window.lastIndexOf('\n'))
+    if (cut < HARD_MAX_CHARS / 2) cut = window.lastIndexOf(' ')
+    if (cut < HARD_MAX_CHARS / 2) cut = HARD_MAX_CHARS
+    out.push(rest.slice(0, cut + 1).trim())
+    rest = rest.slice(Math.max(0, cut + 1 - OVERLAP_CHARS))
+  }
+  if (rest.trim()) out.push(rest.trim())
+  return out
+}
+
 function splitLongText(text: string): string[] {
   if (text.length <= TARGET_CHARS) return [text]
-  const paras = text.split(/\n{2,}/)
+  const paras = text.split(/\n{2,}/).flatMap(hardSplit)
   const out: string[] = []
   let cur = ''
   for (const p of paras) {
@@ -57,7 +82,7 @@ function splitLongText(text: string): string[] {
     }
   }
   if (cur.trim()) out.push(cur.trim())
-  return out
+  return out.flatMap(hardSplit)
 }
 
 export function chunkBody(body: string): Chunk[] {

@@ -98,6 +98,8 @@ function ImportLibrary({ onBack, onNext }: { onBack: () => void; onNext: () => v
   const [progress, setProgress] = useState<ImportProgress | null>(null)
   const [importing, setImporting] = useState(false)
   const [done, setDone] = useState(false)
+  const [passphrase, setPassphrase] = useState('')
+  const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
     void window.pgp.corpusStatus().then(setStatus)
@@ -119,6 +121,23 @@ function ImportLibrary({ onBack, onNext }: { onBack: () => void; onNext: () => v
     }
   }
 
+  // Student path: no course files on this machine yet — download them from
+  // the class server with the passphrase from the welcome email, then import.
+  const runDownload = async (): Promise<void> => {
+    setImporting(true)
+    setError(null)
+    try {
+      await window.pgp.setSettings({ corpusKey: passphrase.trim() })
+      await window.pgp.syncCorpus()
+      setDone(true)
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e))
+    } finally {
+      setImporting(false)
+      setProgress(null)
+    }
+  }
+
   const pct = progress && progress.total > 0 ? Math.round((progress.index / progress.total) * 100) : 0
 
   return (
@@ -133,10 +152,26 @@ function ImportLibrary({ onBack, onNext }: { onBack: () => void; onNext: () => v
         <p className="wizard-ok">
           <CheckCircle2 size={16} /> Library ready
         </p>
-      ) : !status?.hasLocalCorpus ? (
-        <p className="muted small">
-          No local course files found yet. You can do this later from Settings once your corpus is in place.
-        </p>
+      ) : !status?.hasLocalCorpus && !importing ? (
+        <div className="wizard-import">
+          <p className="muted small">
+            Enter the class passphrase from your welcome email to download the course library.
+          </p>
+          <input
+            className="input"
+            type="password"
+            placeholder="Class passphrase"
+            value={passphrase}
+            onChange={(e) => setPassphrase(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && passphrase.trim()) void runDownload()
+            }}
+          />
+          <button className="btn primary" disabled={!passphrase.trim()} onClick={() => void runDownload()}>
+            Download the course library
+          </button>
+          {error && <p className="banner danger">{error}</p>}
+        </div>
       ) : importing ? (
         <div className="wizard-import">
           <div className="progress-track">
@@ -148,7 +183,7 @@ function ImportLibrary({ onBack, onNext }: { onBack: () => void; onNext: () => v
         </div>
       ) : (
         <button className="btn primary wizard-next" onClick={() => void runImport()}>
-          Import {status.fileCount} lessons
+          Import {status?.fileCount ?? ''} lessons
         </button>
       )}
 

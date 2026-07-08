@@ -25,10 +25,19 @@ function resolveNodeBin(): string {
   return 'node'
 }
 
+// onnxruntime's memory arena grows monotonically as batch shapes vary — over a
+// full-corpus import the child climbs to many GB and the OS kills it ("exited
+// (code null)"). Two bounds keep it flat: requests are capped at REQUEST_TEXTS
+// texts each, and the child is retired + respawned after RECYCLE_TEXTS texts
+// (a few seconds' model reload, amortized over ~16 pages).
+const REQUEST_TEXTS = 64
+const RECYCLE_TEXTS = 384
+
 class NodeChildEmbedder implements Embedder {
   private child: ChildProcess | null = null
   private seq = 0
   private pending = new Map<number, Pending>()
+  private textsSinceSpawn = 0
 
   private ensure(): ChildProcess {
     if (this.child) return this.child
@@ -69,9 +78,27 @@ class NodeChildEmbedder implements Embedder {
     await this.request([])
   }
 
-  embedDocuments(texts: string[]): Promise<number[][]> {
-    if (texts.length === 0) return Promise.resolve([])
-    return this.request(texts.map((t) => DOC_PREFIX + t))
+  /** Retire the child between requests once it has embedded enough to have a
+   *  bloated arena. The next request re-forks (and re-loads the model). */
+  private recycleIfNeeded(): void {
+    if (this.textsSinceSpawn < RECYCLE_TEXTS || !this.child || this.pending.size > 0) return
+    const child = this.child
+    this.child = null
+    this.textsSinceSpawn = 0
+    child.removeAllListeners('exit') // a planned retirement, not a failure
+    child.kill()
+  }
+
+  async embedDocuments(texts: string[]): Promise<number[][]> {
+    if (texts.length === 0) return []
+    const out: number[][] = []
+    for (let i = 0; i < texts.length; i += REQUEST_TEXTS) {
+      const slice = texts.slice(i, i + REQUEST_TEXTS)
+      out.push(...(await this.request(slice.map((t) => DOC_PREFIX + t))))
+      this.textsSinceSpawn += slice.length
+      this.recycleIfNeeded()
+    }
+    return out
   }
 
   async embedQuery(text: string): Promise<number[]> {

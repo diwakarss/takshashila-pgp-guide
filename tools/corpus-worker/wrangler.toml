@@ -1,0 +1,8 @@
+name = "pgp-corpus"
+main = "worker.js"
+compatibility_date = "2026-07-01"
+
+# Create once with:  npx wrangler kv namespace create CORPUS
+[[kv_namespaces]]
+binding = "CORPUS"
+id = "a61c7661960b4cf2a8ee1f87cbb9caf0"

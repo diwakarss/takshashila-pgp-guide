@@ -84,6 +84,17 @@ describe('chunkBody', () => {
     chunks.forEach((c, i) => expect(c.ordinal).toBe(i))
   })
 
+  it('hard-caps chunks even when text has no paragraph breaks (book PDFs)', () => {
+    // A 60k-char "paragraph" of single-newline lines — the shape pdftotext
+    // gives for scanned books. Without the cap this became one chunk and
+    // blew up the embedder's memory.
+    const line = 'The rise of great powers reshapes the international order in ways theory must explain. '
+    const body = '## Chapter\n\n' + Array(700).fill(line).join('\n')
+    const chunks = chunkBody(body)
+    expect(chunks.length).toBeGreaterThan(10)
+    for (const c of chunks) expect(c.text.length).toBeLessThan(4300)
+  })
+
   it('splits an over-long section into multiple chunks', () => {
     const long = '# Big\n\n' + Array.from({ length: 40 }, (_, i) => `Paragraph ${i} ` + 'x'.repeat(80)).join('\n\n')
     const chunks = chunkBody(long)

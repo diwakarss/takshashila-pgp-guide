@@ -35,6 +35,20 @@ describe('Brain (PGLite + pgvector)', () => {
     expect(hits[0].score).toBeGreaterThan(hits[1].score)
   })
 
+  it('pruneCorpus retires corpus pages not in keep, never private ones', async () => {
+    await brain.corpusWriter.upsertPage({ slug: 'keep-me' }, [{ ordinal: 0, text: 'kept', embedding: vec(0) }])
+    await brain.corpusWriter.upsertPage({ slug: 'stale-dupe' }, [{ ordinal: 0, text: 'old capture', embedding: vec(3) }])
+    await brain.writer('private').upsertPage({ slug: 'my-note' }, [{ ordinal: 0, text: 'mine', embedding: vec(7) }])
+
+    const pruned = await brain.pruneCorpus(['keep-me'])
+    expect(pruned).toBe(1)
+
+    const s = await brain.stats()
+    expect(s.bySource).toEqual({ corpus: 1, private: 1 })
+    const hits = await brain.search(vec(3), { limit: 5 })
+    expect(hits.some((h) => h.slug === 'stale-dupe')).toBe(false)
+  })
+
   it('upsert replaces a page in place (no duplicate chunks)', async () => {
     const w = brain.corpusWriter
     await w.upsertPage({ slug: 'p1', title: 'v1' }, [{ ordinal: 0, text: 'a', embedding: vec(1) }])

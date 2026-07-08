@@ -186,6 +186,20 @@ function CourseLibrary(props: { status: SystemStatus }): JSX.Element {
   const already = (status.stats?.chunks ?? 0) > 0
   const pct = progress ? Math.round((progress.index / progress.total) * 100) : 0
 
+  // Class passphrase (students): unlocks downloading classes from the corpus
+  // server when there's no local corpus folder on this machine.
+  const [keySet, setKeySet] = useState(false)
+  const [keyInput, setKeyInput] = useState('')
+  useEffect(() => {
+    void window.pgp.getSettings().then((s) => setKeySet(!!s.corpusKey))
+  }, [])
+  const saveKey = async (): Promise<void> => {
+    await window.pgp.setSettings({ corpusKey: keyInput.trim() || null })
+    setKeySet(!!keyInput.trim())
+    setKeyInput('')
+  }
+  const canSync = (corpus?.hasLocalCorpus ?? false) || keySet
+
   return (
     <section className="card">
       <h2>Course library</h2>
@@ -214,13 +228,29 @@ function CourseLibrary(props: { status: SystemStatus }): JSX.Element {
 
       {!busy && (
         <div className="row gap">
-          {already && (
-            <button className="btn primary" disabled={!corpus?.hasLocalCorpus} onClick={sync}>
+          {(already || (!corpus?.hasLocalCorpus && keySet)) && (
+            <button className="btn primary" disabled={!canSync} onClick={sync}>
               Get latest classes
             </button>
           )}
-          <button className={already ? 'btn' : 'btn primary'} disabled={!corpus?.hasLocalCorpus} onClick={run}>
-            {already ? 'Re-import everything' : `Import ${corpus?.fileCount ?? ''} lessons`}
+          {corpus?.hasLocalCorpus && (
+            <button className={already ? 'btn' : 'btn primary'} onClick={run}>
+              {already ? 'Re-import everything' : `Import ${corpus?.fileCount ?? ''} lessons`}
+            </button>
+          )}
+        </div>
+      )}
+      {!busy && (
+        <div className="row gap" style={{ marginTop: 8 }}>
+          <input
+            className="input"
+            type="password"
+            placeholder={keySet ? 'Class passphrase (saved)' : 'Class passphrase'}
+            value={keyInput}
+            onChange={(e) => setKeyInput(e.target.value)}
+          />
+          <button className="btn" disabled={!keyInput.trim() && !keySet} onClick={() => void saveKey()}>
+            {keyInput.trim() ? 'Save' : keySet ? 'Clear' : 'Save'}
           </button>
         </div>
       )}

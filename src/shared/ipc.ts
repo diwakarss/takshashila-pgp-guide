@@ -517,6 +517,8 @@ export type AppSettings = {
   claudeBin: string | null
   codexBin: string | null
   localModel: string | null
+  /** Cohort passphrase for downloading classes from the corpus server. */
+  corpusKey: string | null
 }
 
 /** Either a generated image (dataUrl) or a reason it couldn't be made. */

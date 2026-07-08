@@ -7,6 +7,8 @@ import { Brain, type ConceptRecord } from '../brain/brain'
 import { nomicEmbedder } from '../embed/embedder'
 import { importDirectory, type ImportProgress, type ImportResult } from '../corpus/import'
 import { parsePage } from '../corpus/parse'
+import { syncFromRemote, remoteChanges } from '../corpus/remote'
+import { getSettings } from './settings'
 import { resolveCourse } from '../corpus/course'
 import { imageEngine } from '../illustrate/imageEngine'
 import { activeEngine } from '../engine/registry'
@@ -110,14 +112,17 @@ class StudyBrainService {
   }
 
   /**
-   * Where the importable corpus lives. Dev: the gitignored local clone of
-   * pgp-brain. Overridable via PGP_CORPUS_DIR. (The gated-Worker sync that
-   * replaces this clone is a later phase.)
+   * Where the importable corpus lives, in precedence order: PGP_CORPUS_DIR
+   * (tests/dev), the builder's local pgp-brain clone (JD's dev flow), else
+   * the app-managed mirror in userData that the remote sync fills from the
+   * delivery Worker (students).
    */
   corpusDir(): string {
     const override = process.env['PGP_CORPUS_DIR']
     if (override) return override
-    return join(process.cwd(), 'corpus-cache', 'pgp-brain', 'pgp')
+    const devClone = join(process.cwd(), 'corpus-cache', 'pgp-brain', 'pgp')
+    if (existsSync(devClone)) return devClone
+    return join(app.getPath('userData'), 'corpus', 'pgp')
   }
 
   corpusStatus(): CorpusStatus {
@@ -172,22 +177,32 @@ class StudyBrainService {
    */
   async corpusUpdates(): Promise<CorpusUpdates> {
     const dir = this.corpusDir()
-    if (!existsSync(dir)) return { pending: 0, behind: 0 }
+    const base = dirname(dir)
 
     let behind = 0
-    const repo = dirname(dir)
-    if (existsSync(join(repo, '.git'))) {
-      // Network fetch may fail offline — the badge just falls back to local-only.
-      const fetch = spawnSync('git', ['-C', repo, 'fetch', '--quiet'], { encoding: 'utf8', timeout: 20_000 })
+    if (existsSync(join(base, '.git'))) {
+      // Builder: network fetch may fail offline — fall back to local-only.
+      const fetch = spawnSync('git', ['-C', base, 'fetch', '--quiet'], { encoding: 'utf8', timeout: 20_000 })
       if (fetch.status === 0) {
-        const count = spawnSync('git', ['-C', repo, 'rev-list', '--count', 'HEAD..@{u}'], {
+        const count = spawnSync('git', ['-C', base, 'rev-list', '--count', 'HEAD..@{u}'], {
           encoding: 'utf8',
           timeout: 10_000
         })
         if (count.status === 0) behind = Number(count.stdout.trim()) || 0
       }
+    } else {
+      // Student: count remote files that differ from the local mirror.
+      const key = getSettings().corpusKey
+      if (key) {
+        try {
+          behind = await remoteChanges(base, key)
+        } catch {
+          /* offline / bad key — the sync button reports errors properly */
+        }
+      }
     }
 
+    if (!existsSync(dir)) return { pending: 0, behind }
     const known = await (await this.open()).corpusHashes()
     let pending = 0
     for (const f of readdirSync(dir)) {
@@ -204,16 +219,37 @@ class StudyBrainService {
    * skipped, so only the week's new classes get embedded.
    */
   async syncCorpus(onProgress: (p: ImportProgress) => void): Promise<SyncResult> {
-    const repo = dirname(this.corpusDir())
+    const base = dirname(this.corpusDir())
     let pull = 'no-repo'
-    if (existsSync(join(repo, '.git'))) {
-      const res = spawnSync('git', ['-C', repo, 'pull', '--ff-only'], { encoding: 'utf8', timeout: 120_000 })
+    if (existsSync(join(base, '.git'))) {
+      // Builder flow: the corpus dir is a git clone of pgp-brain.
+      const res = spawnSync('git', ['-C', base, 'pull', '--ff-only'], { encoding: 'utf8', timeout: 120_000 })
       if (res.status !== 0) {
         throw new Error(`corpus pull failed: ${(res.stderr || res.stdout || '').trim().slice(0, 300)}`)
       }
       pull = /already up to date/i.test(res.stdout) ? 'up-to-date' : 'pulled'
+    } else {
+      // Student flow: mirror from the delivery Worker with the class passphrase.
+      const key = getSettings().corpusKey
+      if (key) {
+        const r = await syncFromRemote(base, key, (file, index, total) =>
+          onProgress({ file, index, total, chunks: 0 })
+        )
+        pull = r.downloaded > 0 || r.deleted > 0 ? 'pulled' : 'up-to-date'
+      }
     }
     const result = await this.importCorpus(onProgress, undefined, true)
+
+    // Retire brain pages whose file is gone from the corpus (deleted classes,
+    // replaced duplicates) so they stop surfacing in tutoring and search.
+    const dir = this.corpusDir()
+    if (existsSync(dir)) {
+      const keep = readdirSync(dir)
+        .filter((f) => f.toLowerCase().endsWith('.md') && f.toLowerCase() !== 'readme.md')
+        .map((f) => parsePage(f, readFileSync(join(dir, f), 'utf8')).slug)
+      const pruned = await (await this.open()).pruneCorpus(keep)
+      if (pruned > 0) console.log(`[pgp] pruned ${pruned} removed corpus page(s)`)
+    }
     return { ...result, pull }
   }
 

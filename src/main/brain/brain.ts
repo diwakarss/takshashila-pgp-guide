@@ -691,6 +691,24 @@ export class Brain {
     return updated
   }
 
+  /** Delete corpus pages (and their chunks/edges) whose slug is NOT in
+   *  `keep` — retired classes and replaced duplicates. Returns the count.
+   *  Only ever touches source='corpus'; private pages are untouchable here. */
+  async pruneCorpus(keep: string[]): Promise<number> {
+    const gone = await this.db.query<{ slug: string }>(
+      `SELECT slug FROM pages WHERE source = 'corpus' AND NOT (slug = ANY($1))`,
+      [keep]
+    )
+    if (gone.rows.length === 0) return 0
+    const slugs = gone.rows.map((r) => r.slug)
+    await this.db.transaction(async (tx) => {
+      await tx.query(`DELETE FROM chunks WHERE source = 'corpus' AND slug = ANY($1)`, [slugs])
+      await tx.query(`DELETE FROM edges WHERE source = 'corpus' AND (from_slug = ANY($1) OR to_slug = ANY($1))`, [slugs])
+      await tx.query(`DELETE FROM pages WHERE source = 'corpus' AND slug = ANY($1)`, [slugs])
+    })
+    return slugs.length
+  }
+
   /** slug → content_hash for corpus pages, for incremental (skip-unchanged) imports. */
   async corpusHashes(): Promise<Map<string, string>> {
     const res = await this.db.query<{ slug: string; content_hash: string | null }>(
