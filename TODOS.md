@@ -150,3 +150,23 @@ Economic Reasoning" (staged in ~/.pgp-ingest/staging/, 13 files) vs the old
 widget capture (microeconomics-1-20260620*, missing first ~8 min, desktop OCR
 noise in slide blocks). Same question for market-dynamics vs
 microeconomics-i-class-2. Needs JD's call: replace (delete old slugs) or keep both.
+
+## Brain resilience on unclean shutdown (before cohort distribution)
+
+**What:** A crash or force-quit mid-import can leave the PGLite brain unopenable
+("Aborted()" at open) — observed on the delivery-test brain after two
+embedder-crash + quit cycles, and it's the same failure signature as the
+2026-07-03 corruption incident. A stale `postmaster.pid` also lingers after
+unclean quits.
+
+**Why:** Students will hit power loss / force-quit during the (long) first
+import. An unopenable brain on next launch is a support disaster; non-tech
+users can't hand-restore.
+
+**Ideas:** (1) auto-backup the brain dir before every import/sync (cheap rsync
+hardlink copy) + auto-restore on open failure; (2) remove stale postmaster.pid
+before open; (3) make import restartable-by-design (it already is via
+hash-skip — the missing piece is surviving the open).
+
+**Where to start:** `studyBrain.open()` failure path + the existing
+brain-backup dir convention in userData.
