@@ -9,7 +9,7 @@ import { getSettings, setSettings } from './settings'
 //
 // Endpoint: PGP_TELEMETRY_URL env wins (dev/testing); otherwise the baked-in
 // production URL. Empty string = telemetry disabled at build level.
-const PROD_URL = 'https://pgp-telemetry.takshashila.workers.dev/ping'
+const PROD_URL = 'https://pgp-telemetry.diwakar-s-s.workers.dev/ping'
 
 function endpoint(): string {
   return process.env['PGP_TELEMETRY_URL'] ?? PROD_URL
