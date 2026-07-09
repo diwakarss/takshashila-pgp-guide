@@ -612,15 +612,20 @@ function Editor({ id, engine, onChanged }: { id: string; engine: EngineStatus | 
             </div>
           </section>
 
-          <section className="proj-notes">
-            <div className="recents-label">Your takeaway from this step (carried into the next)</div>
-            <textarea
-              className="proj-notes-box"
-              placeholder="One or two sentences: what did you conclude here?"
-              value={notes}
-              onChange={(e) => saveNotes(e.target.value)}
-            />
-          </section>
+          {/* The final (script) step's conclusion IS the draft — a separate
+              takeaway box there is redundant, and there is no next step to
+              carry it into. */}
+          {!isStoryStep && (
+            <section className="proj-notes">
+              <div className="recents-label">Your takeaway from this step (carried into the next)</div>
+              <textarea
+                className="proj-notes-box"
+                placeholder="One or two sentences: what did you conclude here?"
+                value={notes}
+                onChange={(e) => saveNotes(e.target.value)}
+              />
+            </section>
+          )}
 
           <div className="proj-stepfoot">
             <button className="btn primary proj-step-next" onClick={completeStep} disabled={chatBusy}>
