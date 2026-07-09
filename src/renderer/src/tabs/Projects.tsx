@@ -16,7 +16,7 @@ import {
 } from 'lucide-react'
 import { Md } from '../components/Markdown'
 import { GrowInput } from '../components/GrowInput'
-import { BARDACH_STEPS } from '../../../shared/ipc'
+import { planSteps } from '../../../shared/ipc'
 import type {
   EngineStatus,
   NotebookPageSummary,
@@ -42,7 +42,11 @@ const STEP_CHIPS: Record<string, string[]> = {
   outcomes: ['Check my reasoning so far'],
   tradeoffs: ['What am I missing?'],
   decide: ['Stress-test my decision'],
-  story: ['Structure my 2-minute script', 'Proofread my draft', 'Review my argument']
+  story: ['Structure my 2-minute script', 'Proofread my draft', 'Review my argument'],
+  // explainer plan (analysis assignments)
+  frame: ['Show me the non-obvious angles', 'Is my framing sharp enough?'],
+  mechanics: ['Check my curve logic', 'What magnitudes am I missing?'],
+  angle: ['What would each angle force me to cut?', 'Argue against my favourite']
 }
 
 // What the kickoff will do, per step (sets expectations on the button).
@@ -54,7 +58,11 @@ const KICKOFF_LABEL: Record<string, string> = {
   outcomes: 'Start — the coach maps how to project the outcomes',
   tradeoffs: 'Start — the coach sets up the trade-offs to confront',
   decide: 'Start — the coach stress-tests your leaning decision',
-  story: 'Start — the coach structures your deliverable with you'
+  story: 'Start — the coach structures your deliverable with you',
+  // explainer plan (analysis assignments)
+  frame: 'Start — the coach researches the topic and opens the discussion',
+  mechanics: 'Start — the coach maps the shifts and mechanisms to nail down',
+  angle: 'Start — the coach lays out the candidate angles and their costs'
 }
 
 function dueLabel(dueAt: string | null): { text: string; tone: 'soon' | 'overdue' | 'ok' } | null {
@@ -189,8 +197,9 @@ function Editor({ id, engine, onChanged }: { id: string; engine: EngineStatus | 
     })
   }, [id])
 
+  const steps = planSteps(project?.plan)
   const step = project?.step ?? 0
-  const stepKey = project ? BARDACH_STEPS[step].key : 'define'
+  const stepKey = project ? (steps[step]?.key ?? steps[0].key) : 'define'
   const stepState = project?.stepData[String(step)] ?? { messages: [], notes: '' }
 
   // Keep the notes box in sync when the step changes.
@@ -227,7 +236,7 @@ function Editor({ id, engine, onChanged }: { id: string; engine: EngineStatus | 
   const completeStep = (): void => {
     if (!project) return
     const done = project.done.includes(step) ? project.done : [...project.done, step]
-    const next = Math.min(step + 1, BARDACH_STEPS.length - 1)
+    const next = Math.min(step + 1, steps.length - 1)
     void patch({ done, step: next })
   }
 
@@ -352,9 +361,9 @@ function Editor({ id, engine, onChanged }: { id: string; engine: EngineStatus | 
 
   if (!project) return <p className="muted" style={{ padding: 24 }}>Loading…</p>
 
-  const stepDef = BARDACH_STEPS[step]
+  const stepDef = steps[step] ?? steps[0]
   const due = dueLabel(project.dueAt)
-  const isLastStep = step >= BARDACH_STEPS.length - 1
+  const isLastStep = step >= steps.length - 1
   const isEvidenceStep = stepKey === 'evidence'
   const isStoryStep = stepKey === 'story'
 
@@ -407,9 +416,9 @@ function Editor({ id, engine, onChanged }: { id: string; engine: EngineStatus | 
 
       <div className="proj-body">
         <aside className="proj-steps">
-          <div className="recents-label">Your 8 steps</div>
+          <div className="recents-label">Your {steps.length} steps</div>
           <ul>
-            {BARDACH_STEPS.map((s, i) => {
+            {steps.map((s, i) => {
               const done = project.done.includes(i)
               const active = step === i
               const talked = (project.stepData[String(i)]?.messages.length ?? 0) > 0
@@ -436,7 +445,7 @@ function Editor({ id, engine, onChanged }: { id: string; engine: EngineStatus | 
           <section className="proj-stepguide">
             <div className="proj-stepguide-head">
               <span className="proj-stepguide-label">
-                Step {step + 1} of {BARDACH_STEPS.length} · {stepDef.title}
+                Step {step + 1} of {steps.length} · {stepDef.title}
               </span>
               <span className="proj-lens-chip">India lens · {stepDef.lens}</span>
             </div>

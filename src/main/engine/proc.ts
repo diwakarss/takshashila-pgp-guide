@@ -25,9 +25,12 @@ export function run(bin: string, args: string[], stdin: string | null, timeoutMs
       const spawnBin = isCmdShim ? 'cmd.exe' : bin
       const spawnArgs = isCmdShim ? ['/d', '/s', '/c', [bin, ...args].map((a) => `"${a}"`).join(' ')] : args
       // Neutral cwd so the CLI doesn't inherit a project config (CLAUDE.md etc).
+      // PGP_APP_CALL marks this as a programmatic call so user-level CLI hooks
+      // (e.g. persona injectors) stand down — one polluted the coach's prompts.
       child = spawn(spawnBin, spawnArgs, {
         stdio: ['pipe', 'pipe', 'pipe'],
         cwd: tmpdir(),
+        env: { ...process.env, PGP_APP_CALL: '1' },
         windowsHide: true,
         ...(isCmdShim ? { windowsVerbatimArguments: true } : {})
       })

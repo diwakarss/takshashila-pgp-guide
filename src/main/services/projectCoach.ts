@@ -1,6 +1,6 @@
 import type { Engine, EngineMessage } from '../engine/types'
 import type { CoachAction, CoachResult, Project, ProjectMsg } from '../../shared/ipc'
-import { BARDACH_STEPS } from '../../shared/ipc'
+import { planSteps } from '../../shared/ipc'
 
 // The integrity core (PRD §8.5 / §9): the assistant COACHES — brainstorm,
 // find-evidence, stakeholder-map, proofread, review — but never writes the
@@ -26,7 +26,8 @@ const NO_WRITE_SYSTEM = [
 ].join('\n')
 
 function projectContext(p: Project): string {
-  const step = BARDACH_STEPS[p.step] ?? BARDACH_STEPS[0]
+  const steps = planSteps(p.plan)
+  const step = steps[p.step] ?? steps[0]
   const ev = p.evidence.length ? p.evidence.map((e) => `- ${e.title}: ${e.note}`).join('\n') : '(none pulled in yet)'
   return [
     `Project: ${p.title}`,
@@ -133,6 +134,22 @@ const STEP_CHAT: Record<string, StepChatSpec> = {
     web: true,
     kickoff:
       'Coach the STRUCTURE of the deliverable (for a 2-minute video: ~15s hook, ~60s core mechanism with the key shifts, ~30s spillovers, ~15s takeaway — adapt to their case). Give beats and structure, never script text. Ask what their opening line will be, then react to their attempts.'
+  },
+  // ── explainer-plan steps (analysis assignments: no policy decision to make) ──
+  frame: {
+    web: false, // kickoff still researches (history-empty turns get web); follow-ups frame, not data-hunt
+    kickoff:
+      'Research the assignment topic on the web FIRST. Open with a short, cited landscape (4-6 bullets, concrete figures where possible — save the student the legwork), leaning toward NON-OBVIOUS markets and second-order effects, not just the headline ones. Then ask 2-3 sharp questions that help THEM pick ONE market/story and frame it: what shifted, affecting whom, roughly how big. Rough estimates fine; do NOT send them data-hunting (step 2 verifies).'
+  },
+  mechanics: {
+    web: true,
+    kickoff:
+      'This is the analytical core — economics precision matters most here. Using their framing and evidence (see context), lay out the questions their analysis must answer: which curve shifts, which direction, what magnitude, and the mechanism chain (direct effect → second-order → macro spillover). Fetch any missing magnitudes yourself (web) and report with sources. Then ask THEM to state each shift and trace the chain — you check curve logic ruthlessly (shift OF a curve vs movement ALONG it; demand vs quantity demanded), you do not write their conclusions.'
+  },
+  angle: {
+    web: true,
+    kickoff:
+      'Help them commit to the deliverable\'s angle IN ONE PASS — this step settles the story choice for good. From their mechanics takeaway, name the 2-3 candidate angles in one line each, the strongest counter-argument against their favourite, and what each angle would force them to CUT for the time/length limit. Then ask them to choose, name the cut, and name the trade-off they accept. Once they state it, tell them to write the takeaway and mark the step done — do not reopen the choice afterwards.'
   }
 }
 
@@ -148,25 +165,28 @@ function stepContext(p: Project, step: number): string {
   ]
   // Carry forward the student's takeaways from earlier steps — the thread of
   // their thinking across the flow.
-  const takeaways = BARDACH_STEPS.map((s, i) => ({ s, i, notes: p.stepData[String(i)]?.notes?.trim() }))
+  const steps = planSteps(p.plan)
+  const takeaways = steps
+    .map((s, i) => ({ s, i, notes: p.stepData[String(i)]?.notes?.trim() }))
     .filter((x) => x.i !== step && x.notes)
     .map((x) => `- Step ${x.i + 1} (${x.s.title}): ${truncate(x.notes as string, 500)}`)
   if (takeaways.length) parts.push(`The student's takeaways so far:\n${takeaways.join('\n')}`)
   if (p.evidence.length) parts.push(`Evidence gathered:\n${p.evidence.map((e) => `- ${e.title} (${e.note})`).join('\n')}`)
   if (p.draft.trim()) parts.push(`Their current working draft (THEIR words):\n"""\n${truncate(p.draft, 3000)}\n"""`)
-  const cur = BARDACH_STEPS[step]
+  const cur = steps[step]
   // The coach must know WHERE the student is in the flow: which steps are
   // settled (behind), and which are still ahead — otherwise it defers work to
   // "step 2" when step 2 is already done (a real bug JD hit on step 4).
   const doneTitles = [...p.done]
     .sort((a, b) => a - b)
-    .map((i) => `${i + 1}. ${BARDACH_STEPS[i]?.title}`)
+    .map((i) => `${i + 1}. ${steps[i]?.title}`)
     .join('; ')
-  const aheadTitles = BARDACH_STEPS.slice(step + 1)
+  const aheadTitles = steps
+    .slice(step + 1)
     .map((s, j) => `${step + 2 + j}. ${s.title}`)
     .join('; ')
   parts.push(
-    `Progress: the student is ON step ${step + 1} of ${BARDACH_STEPS.length}.` +
+    `Progress: the student is ON step ${step + 1} of ${steps.length}.` +
       (doneTitles ? ` COMPLETED (behind them): ${doneTitles}.` : ' No steps completed yet.') +
       (aheadTitles ? ` Still AHEAD: ${aheadTitles}.` : ' This is the final step.')
   )
@@ -175,6 +195,7 @@ function stepContext(p: Project, step: number): string {
     [
       `THIS STEP IS DONE WHEN: ${cur.done}.`,
       'Coaching discipline — converge, do not sprawl:',
+      '- NO REHASHING: never re-summarize completed steps or restate the student\'s established facts and conclusions — reference them in at most ONE clause and get straight to this step\'s NEW work. The student wrote those takeaways; they do not need them read back.',
       '- Drive every turn toward that output and nothing else. One thread at a time; do not open new angles once the student is close.',
       `- Work that belongs to one of the steps AHEAD (${aheadTitles || 'none'}) must be PARKED, not pursued: say "that's step N work — park it" and return to this step's output.`,
       '- COMPLETED steps are settled material, never future work: build on their takeaways and the evidence list above. NEVER say something "will happen in step N" when step N is behind the student. If a needed fact from a completed step is missing, fetch it yourself NOW (web) and report it with a source.',
@@ -187,7 +208,7 @@ function stepContext(p: Project, step: number): string {
 }
 
 export function buildStepChatPrompt(project: Project, step: number, history: ProjectMsg[]): EngineMessage[] {
-  const spec = STEP_CHAT[BARDACH_STEPS[step].key]
+  const spec = STEP_CHAT[planSteps(project.plan)[step].key]
   const messages: EngineMessage[] = [
     { role: 'system', content: NO_WRITE_SYSTEM },
     { role: 'user', content: stepContext(project, step) }
@@ -206,8 +227,8 @@ export function buildStepChatPrompt(project: Project, step: number, history: Pro
   return messages
 }
 
-export function stepUsesWeb(step: number): boolean {
-  return STEP_CHAT[BARDACH_STEPS[step].key]?.web ?? false
+export function stepUsesWeb(project: Project, step: number): boolean {
+  return STEP_CHAT[planSteps(project.plan)[step]?.key ?? '']?.web ?? false
 }
 
 export async function runStepChat(
@@ -217,7 +238,7 @@ export async function runStepChat(
   engine: Engine
 ): Promise<string> {
   const raw = await engine.complete(buildStepChatPrompt(project, step, history), {
-    webSearch: stepUsesWeb(step) || history.length === 0,
+    webSearch: stepUsesWeb(project, step) || history.length === 0,
     // Codex spends far longer browsing than Claude — kickoffs (heavy research)
     // get 6 min, follow-ups 4 (measured: Codex research kickoffs exceed 180s).
     timeoutMs: history.length === 0 ? 360_000 : 240_000

@@ -49,7 +49,7 @@ import type {
   ThreadDetail,
   WeakSpot
 } from '../../shared/ipc'
-import { BARDACH_STEPS } from '../../shared/ipc'
+import { planSteps } from '../../shared/ipc'
 
 // Pre-loaded assignments (would sync from Open Takshashila later). Opening one
 // creates its workspace on first open, keyed by the stable catalog id.
@@ -59,8 +59,11 @@ const PROJECT_CATALOG = [
     kind: 'assignment' as const,
     title: 'Understanding the Shifts in Demand and Supply',
     courseCode: 'PP231',
-    courseName: 'Microeconomics-I',
+    courseName: 'Microeconomics I',
     dueAt: '2026-07-10T13:30:00.000Z', // 19:00 IST
+    // Analysis explainer, not a policy recommendation → the explainer plan
+    // (frame → evidence → mechanics → angle → script), not Bardach.
+    plan: 'explainer' as const,
     deliverable: '2-minute video explainer (120s)',
     brief:
       'The ongoing conflict in Iran has disrupted global supply chains, especially energy markets. Identify specific markets or goods where demand and supply curves have shifted as a direct or indirect consequence of the Iran war. Map these shifts and explain the economic mechanisms driving them — moving beyond immediate price changes to consider direct and indirect shifts in demand and supply, broader market repercussions, and macroeconomic spillovers. Submit a 2-minute (120s) video presenting the analysis. Individual work; email to pgp@takshashila.org.in with the anti-plagiarism and AI-use disclaimers.'
@@ -405,7 +408,6 @@ class StudyBrainService {
     const brain = await this.open()
     const started = await brain.listProjects()
     const byId = new Map(started.map((p) => [p.id, p]))
-    const steps = BARDACH_STEPS.length
     const toItem = (base: (typeof PROJECT_CATALOG)[number] | typeof CAPSTONE_ITEM): ProjectListItem => {
       const p = byId.get(base.id)
       return {
@@ -417,7 +419,7 @@ class StudyBrainService {
         dueAt: base.dueAt,
         deliverable: base.deliverable,
         started: !!p,
-        progress: p ? p.done.length / steps : 0,
+        progress: p ? p.done.length / planSteps(p.plan).length : 0,
         updatedAt: p?.updatedAt ?? null
       }
     }
@@ -432,7 +434,7 @@ class StudyBrainService {
         dueAt: p.dueAt,
         deliverable: p.deliverable,
         started: true,
-        progress: p.done.length / steps,
+        progress: p.done.length / planSteps(p.plan).length,
         updatedAt: p.updatedAt
       }))
     return { assignments: PROJECT_CATALOG.map(toItem), capstone: toItem(CAPSTONE_ITEM), personal }
@@ -453,7 +455,8 @@ class StudyBrainService {
       courseName: cat.courseName,
       dueAt: cat.dueAt,
       brief: cat.brief,
-      deliverable: cat.deliverable
+      deliverable: cat.deliverable,
+      plan: 'plan' in cat ? cat.plan : 'bardach'
     })
   }
 

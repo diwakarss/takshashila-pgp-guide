@@ -469,6 +469,7 @@ export class Brain {
     evidence: unknown
     step_data?: unknown
     drafts?: unknown
+    plan?: string | null
     created_at: string
     updated_at: string
   }): Project {
@@ -491,6 +492,7 @@ export class Brain {
       evidence: parse<ProjectEvidence[]>(p.evidence, []),
       stepData: parse<Record<string, ProjectStepState>>(p.step_data, {}),
       drafts: parse<ProjectDraftVersion[]>(p.drafts, []),
+      plan: (p.plan === 'explainer' ? 'explainer' : 'bardach') as Project['plan'],
       createdAt: String(p.created_at),
       updatedAt: String(p.updated_at)
     }
@@ -516,11 +518,12 @@ export class Brain {
     dueAt: string | null
     brief: string
     deliverable: string
+    plan?: string
   }): Promise<Project> {
     await this.db.query(
-      `INSERT INTO projects (id, kind, title, course_code, course_name, due_at, brief, deliverable)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8) ON CONFLICT (id) DO NOTHING`,
-      [p.id, p.kind, p.title, p.courseCode, p.courseName, p.dueAt, p.brief, p.deliverable]
+      `INSERT INTO projects (id, kind, title, course_code, course_name, due_at, brief, deliverable, plan)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) ON CONFLICT (id) DO NOTHING`,
+      [p.id, p.kind, p.title, p.courseCode, p.courseName, p.dueAt, p.brief, p.deliverable, p.plan ?? 'bardach']
     )
     return (await this.getProject(p.id)) as Project
   }

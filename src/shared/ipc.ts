@@ -389,6 +389,15 @@ export type AddSnippetRequest = {
 // ── projects (no-write scaffold: assignments · capstone · personal) ────────
 export type ProjectKind = 'assignment' | 'capstone' | 'personal'
 
+/** One step of a guided project plan. */
+export type StepDef = {
+  key: string
+  title: string
+  guide: string
+  done: string
+  lens: string
+}
+
 // Bardach's 8-step policy analysis: each step carries a plain-language guide
 // (what to DO), an explicit "done" (what the step's output looks like — shown
 // in the UI and used by the coach to converge), and a Takshashila India lens.
@@ -459,6 +468,67 @@ export const BARDACH_STEPS = [
   }
 ] as const
 
+// Analysis/explainer assignments ("identify the markets, map the shifts,
+// explain the mechanisms — submit a video/essay") have NO policy decision to
+// make, so forcing them through Bardach's alternatives→criteria→outcomes→
+// trade-offs→decide loop makes steps 3–7 re-litigate one story choice five
+// times (observed on the first real assignment). This plan matches the actual
+// work: frame → evidence → mechanics → angle → script.
+export const EXPLAINER_STEPS = [
+  {
+    key: 'frame',
+    title: 'Frame the story',
+    guide:
+      'Write ONE sharp, provisional sentence: what shifted, in which market, affecting whom, and roughly how big. Rough numbers are fine — step 2 verifies. Not "the war affects energy" but "the Hormuz shock seems to have cut half of India’s helium imports, threatening MRI availability".',
+    done: 'your takeaway box holds one sentence naming the market, the shift, who it hits, and a rough size',
+    lens: 'Is the interesting story the obvious one?'
+  },
+  {
+    key: 'evidence',
+    title: 'Assemble evidence',
+    guide:
+      'Now prove it — or correct it. Your coach researches the actual figures and sources; you judge them. Save the findings that convince you with "Add evidence" — they become your citations. If the evidence contradicts your framing, sharpen it — that’s the method working.',
+    done: 'the key numbers in your framing are verified (or corrected) and your evidence list holds the sources you’ll cite',
+    lens: 'What does the data actually say?'
+  },
+  {
+    key: 'mechanics',
+    title: 'Map the shifts & mechanisms',
+    guide:
+      'This is the analytical core. For your market: which curve shifts (supply/demand), which direction, how far, and WHY — then trace the chain: the direct effect, the indirect/second-order effects, and any macro spillovers. Get the curve language exactly right (a price change along a curve is not a shift OF the curve).',
+    done: 'your takeaway states each shift (curve + direction + magnitude) and the mechanism chain from trigger to effect',
+    lens: 'Movement along vs shift of the curve'
+  },
+  {
+    key: 'angle',
+    title: 'Choose the angle & the cut',
+    guide:
+      'Decide, once, what the deliverable leads with and what you leave OUT — a 2-minute video holds one story well, not three. Name the trade-off you’re accepting (e.g. a richer story on thinner data) and why it’s defensible. This is the only step where you argue with yourself about the choice — settle it here and don’t reopen it.',
+    done: 'your takeaway names the angle, what you’re cutting, and the trade-off you accept — in 2-3 sentences',
+    lens: 'Who bears the cost in your story?'
+  },
+  {
+    key: 'story',
+    title: 'Script & produce',
+    guide:
+      'Turn the analysis into the deliverable — your script/storyboard, in your own words. Lead with the hook, then the mechanism, then the evidence, then who pays. ~150 spoken words per minute. Save versions as you go and mark one final.',
+    done: 'a version of your draft is saved and marked final',
+    lens: 'Clear to a non-expert in 120 seconds?'
+  }
+] as const
+
+export type ProjectPlan = 'bardach' | 'explainer'
+
+/** The step plans a project can follow; every project carries a `plan`. */
+export const PROJECT_PLANS: Record<ProjectPlan, readonly StepDef[]> = {
+  bardach: BARDACH_STEPS,
+  explainer: EXPLAINER_STEPS
+}
+
+export function planSteps(plan: ProjectPlan | null | undefined): readonly StepDef[] {
+  return PROJECT_PLANS[plan ?? 'bardach'] ?? BARDACH_STEPS
+}
+
 export type ProjectEvidence = { id: string; title: string; note: string; sources: NoteSource[]; pageId: string | null }
 
 // The guided flow: each step carries its own coach conversation + the student's
@@ -478,8 +548,9 @@ export type Project = {
   dueAt: string | null
   brief: string // the assignment prompt / description
   deliverable: string // e.g. "2-minute video explainer"
+  plan: ProjectPlan // which guided step plan this project follows
   draft: string // the student's own working draft (never AI-written)
-  step: number // active Bardach step index
+  step: number // active step index (within the plan)
   done: number[] // completed step indices
   evidence: ProjectEvidence[]
   stepData: Record<string, ProjectStepState> // keyed by step index

@@ -131,6 +131,7 @@ CREATE TABLE IF NOT EXISTS projects (
   evidence    JSONB NOT NULL DEFAULT '[]',
   step_data   JSONB NOT NULL DEFAULT '{}',
   drafts      JSONB NOT NULL DEFAULT '[]',
+  plan        TEXT NOT NULL DEFAULT 'bardach',
   created_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
   updated_at  TIMESTAMPTZ NOT NULL DEFAULT now()
 );
@@ -138,6 +139,8 @@ CREATE INDEX IF NOT EXISTS projects_updated_idx ON projects (updated_at DESC);
 -- Upgrade projects created before the guided flow existed.
 ALTER TABLE projects ADD COLUMN IF NOT EXISTS step_data JSONB NOT NULL DEFAULT '{}';
 ALTER TABLE projects ADD COLUMN IF NOT EXISTS drafts JSONB NOT NULL DEFAULT '[]';
+-- Upgrade projects created before per-assignment step plans existed.
+ALTER TABLE projects ADD COLUMN IF NOT EXISTS plan TEXT NOT NULL DEFAULT 'bardach';
 
 -- Illustration library: one row per drawn concept. Matched by embedding so a
 -- concept is drawn ONCE and reused across questions/phrasings (no per-answer
