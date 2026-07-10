@@ -1,5 +1,7 @@
 import { fork, execSync, type ChildProcess } from 'node:child_process'
 import { join } from 'node:path'
+import { existsSync } from 'node:fs'
+import { app } from 'electron'
 import { DOC_PREFIX, QUERY_PREFIX } from './contract'
 import type { Embedder } from './types'
 
@@ -16,8 +18,12 @@ type Pending = { resolve: (v: number[][]) => void; reject: (e: Error) => void }
 
 function resolveNodeBin(): string {
   if (process.env['PGP_NODE_BIN']) return process.env['PGP_NODE_BIN']
+  // Packaged builds ship their own Node runtime — students don't have one.
+  const bundled = join(process.resourcesPath ?? '', 'node', process.platform === 'win32' ? 'node.exe' : 'node')
+  if (app.isPackaged && existsSync(bundled)) return bundled
   try {
-    const p = execSync('command -v node', { encoding: 'utf8' }).trim()
+    const cmd = process.platform === 'win32' ? 'where node' : 'command -v node'
+    const p = execSync(cmd, { encoding: 'utf8' }).split(/\r?\n/)[0].trim()
     if (p) return p
   } catch {
     /* fall through */
@@ -44,7 +50,12 @@ class NodeChildEmbedder implements Embedder {
     const childPath = join(import.meta.dirname, 'embedderProcess.js')
     const child = fork(childPath, [], {
       execPath: resolveNodeBin(),
-      stdio: ['ignore', 'inherit', 'inherit', 'ipc']
+      stdio: ['ignore', 'inherit', 'inherit', 'ipc'],
+      env: {
+        ...process.env,
+        // model cache must live in userData, never inside the install dir
+        PGP_MODEL_CACHE: join(app.getPath('userData'), 'models')
+      }
     })
     child.on('message', (m: { id: number; vectors?: number[][]; error?: string }) => {
       const p = this.pending.get(m.id)

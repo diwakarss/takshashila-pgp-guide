@@ -1,0 +1,47 @@
+# Installers for students. Unsigned for now (internal distribution to the
+# cohort): macOS users get the Gatekeeper "Open Anyway" dance, Windows users
+# one SmartScreen "More info → Run anyway" click. Signing + auto-update come
+# later (TODOS).
+appId: net.takshashila.pgp-guide
+productName: PGP Guide
+directories:
+  output: dist-installers
+  buildResources: build
+
+# Plain directory layout (no asar): the embedder runs as a SYSTEM-NODE child
+# process (bundled Node, see afterPack) and plain Node cannot read inside an
+# asar archive. PGLite's WASM is also loaded from node_modules at runtime.
+asar: false
+npmRebuild: false
+
+files:
+  - out/**
+  - package.json
+  - node_modules/**
+  - "!node_modules/.cache/**"
+  - "!node_modules/@huggingface/transformers/.cache/**"
+  - "!**/*.map"
+
+afterPack: scripts/afterPack.cjs
+
+mac:
+  category: public.app-category.education
+  target:
+    - target: dmg
+      # arm64 only: the onnxruntime-node package here ships no darwin/x64
+      # binding, so an Intel-mac build would die at first embed. Revisit if
+      # any student has an Intel Mac.
+      arch: [arm64]
+  artifactName: PGP-Guide-${version}-mac-${arch}.${ext}
+
+win:
+  target:
+    - target: nsis
+      arch: [x64]
+  artifactName: PGP-Guide-${version}-win-${arch}.${ext}
+
+nsis:
+  oneClick: true
+  perMachine: false # per-user install: writable dir, no admin prompt
+
+publish: null

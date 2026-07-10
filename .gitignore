@@ -18,3 +18,4 @@ corpus-cache/
 .DS_Store
 *.log
 .gstack/
+build/node/

@@ -1,6 +1,6 @@
 {
   "name": "pgp-guide",
-  "version": "0.0.0",
+  "version": "0.1.0",
   "description": "Takshashila PGP Guide — local-first AI study companion for the PGP cohort",
   "main": "./out/main/index.js",
   "author": "Diwakar",
@@ -17,7 +17,9 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:e2e": "vitest run --config vitest.e2e.config.ts",
-    "lint": "echo \"(lint not configured yet)\""
+    "lint": "echo \"(lint not configured yet)\"",
+    "build:mac": "electron-vite build && electron-builder --mac",
+    "build:win": "electron-vite build && electron-builder --win"
   },
   "dependencies": {
     "@electric-sql/pglite": "^0.2.17",
@@ -36,6 +38,7 @@
     "@types/turndown": "^5.0.6",
     "@vitejs/plugin-react": "^4.3.4",
     "electron": "^33.3.1",
+    "electron-builder": "^26.15.3",
     "electron-vite": "^2.3.0",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",

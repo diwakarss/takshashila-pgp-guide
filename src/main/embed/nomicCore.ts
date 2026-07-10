@@ -1,6 +1,11 @@
-import { pipeline, type FeatureExtractionPipeline } from '@huggingface/transformers'
+import { pipeline, env as hfEnv, type FeatureExtractionPipeline } from '@huggingface/transformers'
 import { EMBED_DIM, EMBED_MODEL_ID, EMBED_DTYPE, DOC_PREFIX, QUERY_PREFIX, POOLING, NORMALIZE } from './contract'
 import type { Embedder } from './types'
+
+// Packaged apps must NOT cache the model inside the install dir (read-only
+// under Windows Program Files; pollutes the .app on mac). The parent process
+// passes a userData path; dev runs keep the package-local default.
+if (process.env['PGP_MODEL_CACHE']) hfEnv.cacheDir = process.env['PGP_MODEL_CACHE']
 
 // The actual nomic embedding, via Transformers.js + onnxruntime. This runs in
 // a plain Node context: the utilityProcess child (the app) and Vitest (the
