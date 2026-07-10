@@ -510,6 +510,83 @@ app.whenReady().then(() => {
     })().catch((e) => console.error('[kick] failed:', e))
   }
 
+  // Walk a project flow end-to-end from a student's perspective (isolated dir
+  // ONLY). PGP_DEV_FLOWTEST=pp221|personal — kickoff + one realistic reply per
+  // step, notes written, steps completed; full coach replies logged for review.
+  if (process.env['PGP_DEV_FLOWTEST']) {
+    void (async () => {
+      if (!process.env['PGP_USERDATA']) {
+        console.error('[flow] REFUSING without PGP_USERDATA')
+        app.quit()
+        return
+      }
+      const which = process.env['PGP_DEV_FLOWTEST']
+      const SCRIPTS: Record<string, { id?: string; personal?: string; steps: { msg: string; note: string }[] }> = {
+        pp221: {
+          id: 'pp221-policy-that-worked',
+          steps: [
+            { msg: 'I pick UPI — the Unified Payments Interface. It moved India from cash to instant digital payments at population scale. Sharp enough?', note: 'Policy: UPI (NPCI, 2016) — population-scale instant digital payments; worked well by adoption and inclusion measures.' },
+            { msg: 'The volume and merchant-adoption numbers convince me. Anything contradicting the "worked well" claim I should confront?', note: 'Verified: ~14bn+ txns/month, dominant share of retail digital payments; counterpoints noted (zero-MDR strain on providers).' },
+            { msg: 'Three explanations to weigh: open interoperable protocol, zero user cost, and riding existing rails (Aadhaar/bank accounts/smartphones). A fourth or are these the spine?', note: 'Candidate explanations: interoperability by design; zero cost to users; built on existing identity/banking/smartphone rails.' },
+            { msg: 'I will judge them by: which best explains adoption speed, evidence strength, and webinar-concept fit (incentives, state capacity). Good ruler?', note: 'Criteria: explains adoption speed; evidence strength; maps to course concepts (incentives, state as platform).' },
+            { msg: 'If MDR had not been zero, adoption would likely have been slower but providers healthier — is that the right counterfactual shape for Q3?', note: 'Projection: zero-MDR accelerated adoption but starved provider revenue — the "do differently" lever is a small, capped interchange fee.' },
+            { msg: 'Trade-off I accept: recommending a small fee risks slowing the flywheel, but sustainability of providers matters more now that adoption is won.', note: 'Trade-off: small interchange fee = provider sustainability at some adoption risk — acceptable post-scale.' },
+            { msg: 'Decision: UPI worked because of interoperability + zero cost + existing rails; improve it with a capped fee; unintended consequence to flag is fraud scaling with reach. Defensible?', note: 'Decision: three explanations locked; change = capped interchange fee; unintended consequence = fraud/scam growth, mitigated by rate-limits and education — which themselves risk friction.' },
+            { msg: 'Here is my structure: 100w pick, 500w three explanations, 300w the fee change, 300w fraud consequence + mitigation. Critique the structure only.', note: '' }
+          ]
+        },
+        personal: {
+          personal: 'Substack: Why Indian cities cannot fix their buses',
+          steps: [
+            { msg: 'I want to write about why Indian city bus systems stay bad: my hunch is fare-box politics plus fragmented control. Sharp enough to start?', note: 'Problem: city buses underperform because fares are politically frozen and control is fragmented across agencies.' },
+            { msg: 'Find me the strongest numbers on fleet-per-capita and farebox recovery for 2-3 Indian cities.', note: 'Evidence: fleet/capita far below benchmarks; farebox recovery low; BMTC/BEST figures saved.' },
+            { msg: 'Angles: (a) money story (fares/subsidy), (b) governance story (who controls buses), (c) do-nothing baseline. Enough?', note: 'Angles: money story; governance story; baseline drift.' },
+            { msg: 'Judge by reader resonance and evidence availability.', note: 'Criteria: resonance for a general reader; evidence availability.' },
+            { msg: 'If fares stay frozen, fleets shrink in real terms; if governance unifies, procurement improves first — plausible projections?', note: 'Projections: frozen fares → real fleet decline; unified authority → procurement gains first, service gains later.' },
+            { msg: 'I accept the governance story is harder to source but more original — I will lead with it and use money as supporting act.', note: 'Trade-off: originality of governance story over easier-to-source money story.' },
+            { msg: 'Decision: lead governance, support with money numbers, end with one reform ask. Defensible?', note: 'Decision: governance-led essay with money evidence; one concrete reform ask (empowered unified transport authority).' },
+            { msg: 'Structure: hook (a bus that never comes), governance diagnosis, money reinforcement, reform ask. Critique structure only.', note: '' }
+          ]
+        }
+      }
+      const spec = SCRIPTS[which ?? '']
+      if (!spec) {
+        console.error(`[flow] unknown flow "${which}"`)
+        app.quit()
+        return
+      }
+      let id = spec.id as string
+      if (spec.personal) {
+        const p = await studyBrain.createPersonalProject(spec.personal)
+        id = p.id
+      } else {
+        await studyBrain.deleteProject(id)
+      }
+      const proj = await studyBrain.openProject(id)
+      console.log(`[flow] ${which}: "${proj?.title}" plan=${proj?.plan} steps=${spec.steps.length}`)
+      for (let step = 0; step < spec.steps.length; step++) {
+        const t0 = Date.now()
+        const kicked = await studyBrain.projectChat(id, step) // kickoff
+        const kmsg = kicked?.stepData[String(step)]?.messages.at(-1)?.text ?? '(none)'
+        console.log(`\n[flow] ── STEP ${step + 1} KICKOFF (${Math.round((Date.now() - t0) / 1000)}s) ──\n${kmsg.slice(0, 900)}`)
+        const replied = await studyBrain.projectChat(id, step, spec.steps[step].msg)
+        const rmsg = replied?.stepData[String(step)]?.messages.at(-1)?.text ?? '(none)'
+        console.log(`\n[flow] ── STEP ${step + 1} COACH REPLY ──\n${rmsg.slice(0, 900)}`)
+        const p = await studyBrain.openProject(id)
+        await studyBrain.updateProject(id, {
+          stepData: { ...p!.stepData, [String(step)]: { ...(p!.stepData[String(step)] ?? { messages: [] }), notes: spec.steps[step].note } },
+          done: [...(p!.done ?? []), step],
+          step: Math.min(step + 1, spec.steps.length - 1)
+        })
+      }
+      console.log(`\n[flow] ${which} COMPLETE ✓`)
+      app.quit()
+    })().catch((e) => {
+      console.error('[flow] failed:', e)
+      app.quit()
+    })
+  }
+
   // Probe the STUDENT delivery path end-to-end against the real corpus
   // Worker. PGP_DEV_REMOTETEST=1 with PGP_USERDATA + PGP_CORPUS_DIR pointing
   // into the isolated dir and corpusKey pre-seeded in its settings.json:
