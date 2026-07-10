@@ -52,8 +52,9 @@ class NodeChildEmbedder implements Embedder {
       execPath: resolveNodeBin(),
       stdio: ['ignore', 'inherit', 'inherit', 'ipc'],
       // node.exe is a console binary — without this, every launch pops a blank
-      // terminal window on Windows (GUI parents get no console on mac/linux)
-      windowsHide: true,
+      // terminal window on Windows (GUI parents get no console on mac/linux).
+      // fork forwards it to spawn at runtime; our @types/node just omits it.
+      ...({ windowsHide: true } as object),
       env: {
         ...process.env,
         // model cache must live in userData, never inside the install dir

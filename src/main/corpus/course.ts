@@ -29,7 +29,10 @@ const CANONICAL_NAMES: Record<string, string> = {
 const HUB_ORDER = ['GENERAL', 'ORIENTATION', 'AD-HOC-POLICY-SESSIONS', 'POLICY-HEADLINES', 'PP231', 'PP221', 'PP223']
 
 export function courseRank(code: string): number {
-  const i = HUB_ORDER.indexOf(code.toUpperCase())
+  const c = code.toUpperCase()
+  // Session-qualified series ("POLICY-HEADLINES-DELIMITATION", "AD-HOC-LONG-ARC-…")
+  // rank with their container so the hub order survives qualification.
+  const i = HUB_ORDER.findIndex((h) => c === h || c.startsWith(h) || (h.startsWith('AD-HOC') && c.startsWith('AD-HOC')))
   return i === -1 ? HUB_ORDER.length : i
 }
 
@@ -62,7 +65,7 @@ export function parseCourseField(v: unknown): Course | null {
   const known = COURSES.find((c) => c.code.toLowerCase() === s.toLowerCase())
   if (known) return known
   if (/^pgp/i.test(s) || s.length < 4) return null
-  return { code: s.toUpperCase().replace(/[^A-Z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 20), name: s }
+  return { code: s.toUpperCase().replace(/[^A-Z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 40), name: s }
 }
 
 /** The course for a page: explicit frontmatter wins; the slug heuristic is the

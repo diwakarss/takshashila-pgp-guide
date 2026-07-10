@@ -33,7 +33,7 @@ export function TopBar(props: {
             <option value="">All courses</option>
             {courses.map((c) => (
               <option key={c.code} value={c.code}>
-                {c.code} · {c.name} ({c.lessons})
+                {/^PP\d/.test(c.code) ? `${c.code} · ${c.name}` : c.name} ({c.lessons})
               </option>
             ))}
           </select>
