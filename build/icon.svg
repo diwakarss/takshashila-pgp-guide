@@ -6,12 +6,12 @@
     </linearGradient>
   </defs>
   <rect x="10" y="10" width="180" height="180" rx="40" fill="url(#bg)"/>
-  <!-- compass — dominant, fills the upper tile -->
-  <g transform="translate(100,82)">
-    <circle r="47" fill="none" stroke="#faf7f0" stroke-width="8"/>
-    <path d="M0 -32 L13 14 L0 4 L-13 14 Z" fill="#eda100"/>
-  </g>
-  <!-- open book — full width across the base -->
-  <path d="M26 138 C52 124 78 124 100 134 C122 124 148 124 174 138 L174 154 C148 140 122 140 100 150 C78 140 52 140 26 154 Z" fill="#faf7f0"/>
-  <path d="M100 134 L100 150" stroke="#152e54" stroke-width="3"/>
+  <!-- pediment -->
+  <path d="M34 74 L100 34 L166 74 Z" fill="#faf7f0"/>
+  <!-- columns as ascending bars; the tallest carries the accent -->
+  <rect x="38"  y="118" width="30" height="46" rx="6" fill="#faf7f0"/>
+  <rect x="85"  y="96"  width="30" height="68" rx="6" fill="#faf7f0"/>
+  <rect x="132" y="74"  width="30" height="90" rx="6" fill="#eda100"/>
+  <!-- base -->
+  <rect x="30" y="172" width="140" height="12" rx="6" fill="#faf7f0"/>
 </svg>

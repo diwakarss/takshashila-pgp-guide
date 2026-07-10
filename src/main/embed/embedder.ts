@@ -51,6 +51,9 @@ class NodeChildEmbedder implements Embedder {
     const child = fork(childPath, [], {
       execPath: resolveNodeBin(),
       stdio: ['ignore', 'inherit', 'inherit', 'ipc'],
+      // node.exe is a console binary — without this, every launch pops a blank
+      // terminal window on Windows (GUI parents get no console on mac/linux)
+      windowsHide: true,
       env: {
         ...process.env,
         // model cache must live in userData, never inside the install dir
