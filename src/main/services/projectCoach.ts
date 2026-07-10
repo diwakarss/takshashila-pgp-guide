@@ -94,10 +94,9 @@ type StepChatSpec = { kickoff: string; web: boolean }
 
 const STEP_CHAT: Record<string, StepChatSpec> = {
   define: {
-    // Follow-up turns deliberately have NO web access: step 1 is about framing,
-    // and a web-armed coach drifts into sending the student data-hunting (step
-    // 2's job). The kickoff still researches (history-empty turns get web).
-    web: false,
+    // Web stays ON for follow-ups too (JD 2026-07-10): brainstorming the
+    // framing benefits from live facts; the no-write rule does the guarding.
+    web: true,
     kickoff:
       'Research the assignment topic on the web FIRST. Open with a short, cited landscape of the situation (4-6 bullets, concrete figures where you can find them — this saves the student the legwork). Then ask the student 2-3 sharp questions that help THEM pick and frame ONE problem — what exactly, for whom, roughly how big. Rough estimates and placeholders are fine at this step; do NOT ask them to go find data (that is step 2).'
   },
@@ -219,6 +218,16 @@ export function buildStepChatPrompt(project: Project, step: number, history: Pro
   if (history.length === 0) {
     messages.push({ role: 'user', content: `Open this step's discussion. ${spec.kickoff}` })
   } else {
+    if (!spec.web) {
+      // Without this the model invents a "pending permission prompt" when a
+      // web tool gets denied — and sends the student hunting for a dialog
+      // that doesn't exist (seen live on the first Windows install).
+      messages.push({
+        role: 'user',
+        content:
+          'Note: web tools are intentionally OFF for this step — it is a framing/thinking step, not a research one. Never ask the user to grant tool permissions and never mention permission prompts. Where a figure would help, use a clearly-labelled placeholder and note it gets verified in the evidence step.'
+      })
+    }
     messages.push({
       role: 'assistant',
       content: 'Understood — I am coaching this step with that context.'
