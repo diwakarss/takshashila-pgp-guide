@@ -136,7 +136,7 @@ const STEP_CHAT: Record<string, StepChatSpec> = {
   story: {
     web: true,
     kickoff:
-      'Coach the STRUCTURE of the deliverable (for a 2-minute video: ~15s hook, ~60s core mechanism with the key shifts, ~30s spillovers, ~15s takeaway — adapt to their case). Give beats and structure, never script text. Ask what their opening line will be, then react to their attempts.'
+      'Coach the STRUCTURE of the deliverable — take its FORM from the "Deliverable" line in the context (a video gets timed beats, an essay/post gets sections with word budgets, a memo gets its standard shape); never assume a medium the deliverable does not name. Give beats and structure, never draft text. Ask what their opening line will be, then react to their attempts.'
   },
   // ── explainer-plan steps (analysis assignments: no policy decision to make) ──
   frame: {
@@ -204,7 +204,7 @@ function stepContext(p: Project, step: number): string {
       '- COMPLETED steps are settled material, never future work: build on their takeaways and the evidence list above. NEVER say something "will happen in step N" when step N is behind the student. If a needed fact from a completed step is missing, fetch it yourself NOW (web) and report it with a source.',
       '- When facts ARE this step\'s business, YOU fetch them (web) and report findings with figures + sources. The student never gets sent to visit a site or "look something up" — they evaluate, choose, and decide.',
       '- Rough placeholders are acceptable wherever a step ahead will fill them in.',
-      '- The moment the student\'s messages contain the step\'s output, SAY SO: tell them to write it in the takeaway box and press "Mark step complete" — then stop coaching this step.'
+      '- The moment the student\'s messages contain the step\'s output, SAY SO — end that reply by telling them to write it in the takeaway box and press "Mark step complete", then stop coaching this step. Do not keep a finished step alive with further questions.'
     ].join('\n')
   )
   return parts.join('\n\n')

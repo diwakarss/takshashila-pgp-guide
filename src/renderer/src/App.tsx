@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Sidebar } from './components/Sidebar'
-import { TopBar } from './components/TopBar'
+import { TopBar, type TopNav } from './components/TopBar'
 import { Tutor } from './tabs/Tutor'
 import { Quiz } from './tabs/Quiz'
 import { Research } from './tabs/Research'
@@ -62,6 +62,16 @@ export function App(): JSX.Element {
   const activeOpenThreadId = tab === 'research' ? openResearchId : openThreadId
   const threadsChanged = (): void => setThreadsVersion((v) => v + 1)
 
+  // Uniform back-navigation in the top bar: whichever tab has an item open,
+  // "‹ <tab>" returns to that tab's landing.
+  const topNav: TopNav = (() => {
+    if (tab === 'tutor' && openThreadId) return { label: 'Tutor', onBack: () => setOpenThreadId(null) }
+    if (tab === 'research' && openResearchId) return { label: 'Research', onBack: () => setOpenResearchId(null) }
+    if (tab === 'notebook' && openNotebookId) return { label: 'Notebook', onBack: () => setOpenNotebookId(null) }
+    if (tab === 'projects' && openProjectId) return { label: 'Projects', onBack: () => setOpenProjectId(null) }
+    return null
+  })()
+
   // Choosing a course starts a new conversation in that course.
   const chooseCourse = (code: string): void => {
     setCourse(code)
@@ -104,7 +114,7 @@ export function App(): JSX.Element {
         onProjectsChanged={() => setProjectsVersion((v) => v + 1)}
       />
       <div className="main-col">
-        <TopBar tab={tab} courses={courses} course={course} onCourse={chooseCourse} />
+        <TopBar tab={tab} courses={courses} course={course} onCourse={chooseCourse} nav={topNav} />
         <main className="content">
           {tab === 'tutor' && (
             <Tutor

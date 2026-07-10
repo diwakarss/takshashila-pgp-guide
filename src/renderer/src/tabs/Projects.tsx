@@ -6,7 +6,6 @@ import {
   Trash2,
   BookMarked,
   Copy,
-  ChevronLeft,
   ChevronRight,
   X,
   Lightbulb,
@@ -88,7 +87,7 @@ export function Projects(props: {
   onChanged: () => void
 }): JSX.Element {
   const { engine, openId, onOpenProject, onChanged } = props
-  if (openId) return <Editor id={openId} engine={engine} onChanged={onChanged} onBack={() => onOpenProject(null)} />
+  if (openId) return <Editor id={openId} engine={engine} onChanged={onChanged} />
   return <Welcome onOpen={onOpenProject} onChanged={onChanged} />
 }
 
@@ -170,17 +169,7 @@ function Welcome({ onOpen, onChanged }: { onOpen: (id: string) => void; onChange
 }
 
 // ── the guided workspace ───────────────────────────────────────────────────
-function Editor({
-  id,
-  engine,
-  onChanged,
-  onBack
-}: {
-  id: string
-  engine: EngineStatus | null
-  onChanged: () => void
-  onBack: () => void
-}): JSX.Element {
+function Editor({ id, engine, onChanged }: { id: string; engine: EngineStatus | null; onChanged: () => void }): JSX.Element {
   const [project, setProject] = useState<Project | null>(null)
   const [chatBusy, setChatBusy] = useState(false)
   const [chatInput, setChatInput] = useState('')
@@ -381,9 +370,6 @@ function Editor({
   return (
     <div className="proj-editor">
       <div className="proj-ed-head">
-        <button className="btn ghost proj-back" title="All projects" onClick={onBack}>
-          <ChevronLeft size={16} /> Projects
-        </button>
         {project.kind === 'personal' ? (
           <input
             className="nb-title proj-title-input"
