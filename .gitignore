@@ -19,3 +19,4 @@ corpus-cache/
 *.log
 .gstack/
 build/node/
+dist-installers/
