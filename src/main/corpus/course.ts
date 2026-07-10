@@ -23,6 +23,16 @@ const CANONICAL_NAMES: Record<string, string> = {
   PP223: 'International Relations and Foreign Affairs'
 }
 
+// Course lists follow the OpenTakshashila hub's top-to-bottom order so the
+// app never presents a random ordering students have to re-learn. Unknown
+// codes sort after these, alphabetically.
+const HUB_ORDER = ['GENERAL', 'ORIENTATION', 'AD-HOC-POLICY-SESSIONS', 'POLICY-HEADLINES', 'PP231', 'PP221', 'PP223']
+
+export function courseRank(code: string): number {
+  const i = HUB_ORDER.indexOf(code.toUpperCase())
+  return i === -1 ? HUB_ORDER.length : i
+}
+
 const MICRO_RE =
   /microeconom|pp231|economic-reasoning|price-value|price-and-cost|law-of-demand|\bdemand\b|market-equilibrium|comparative-advantage|\btrade\b|government-intervention-in-markets|transaction-cost|elasticit|\bsupply\b|opportunity-cost|incentive/
 const FUND_RE =

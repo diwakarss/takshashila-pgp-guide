@@ -9,7 +9,7 @@ import { importDirectory, type ImportProgress, type ImportResult } from '../corp
 import { parsePage } from '../corpus/parse'
 import { syncFromRemote, remoteChanges } from '../corpus/remote'
 import { getSettings } from './settings'
-import { resolveCourse } from '../corpus/course'
+import { resolveCourse, courseRank } from '../corpus/course'
 import { imageEngine } from '../illustrate/imageEngine'
 import { activeEngine } from '../engine/registry'
 import { runTutor, summariseReply, type TurnContext } from './tutor'
@@ -67,6 +67,20 @@ const PROJECT_CATALOG = [
     deliverable: '2-minute video explainer (120s)',
     brief:
       'The ongoing conflict in Iran has disrupted global supply chains, especially energy markets. Identify specific markets or goods where demand and supply curves have shifted as a direct or indirect consequence of the Iran war. Map these shifts and explain the economic mechanisms driving them — moving beyond immediate price changes to consider direct and indirect shifts in demand and supply, broader market repercussions, and macroeconomic spillovers. Submit a 2-minute (120s) video presenting the analysis. Individual work; email to pgp@takshashila.org.in with the anti-plagiarism and AI-use disclaimers.'
+  },
+  {
+    id: 'pp221-policy-that-worked',
+    kind: 'assignment' as const,
+    title: 'A Policy That Worked Well',
+    courseCode: 'PP221',
+    courseName: 'Fundamentals of Public Policy',
+    dueAt: '2026-07-31T13:30:00.000Z', // 19:00 IST
+    // Genuine alternatives ("do differently") and outcome/consequence questions
+    // → Bardach fits this one, unlike the PP231 explainer.
+    plan: 'bardach' as const,
+    deliverable: 'Written analysis, PDF (100 + 500 + 300 + 300 words)',
+    brief:
+      'Pick a policy that you think has worked well (100 words). Drawing on concepts from the four PP221 webinars, identify 3 things that explain why it worked well (500 words). Identify at least 1 thing that could be done differently to make it work better — an addition, a subtraction, or a change in how something was done (300 words). Identify at least one possible unintended consequence of this policy; how could it be avoided or mitigated, and would the mitigation have unintended consequences of its own? (300 words). Individual work; submit as PDF by replying to the assignment email thread (pgp@takshashila.org.in) with the anti-plagiarism and AI-use disclaimers.'
   }
 ]
 const CAPSTONE_ITEM = {
@@ -258,7 +272,9 @@ class StudyBrainService {
 
   async courses(): Promise<CourseSummary[]> {
     const brain = await this.open()
-    return brain.courses()
+    const list = await brain.courses()
+    // Same order as the OT hub, so the app never invents its own.
+    return list.sort((a, b) => courseRank(a.code) - courseRank(b.code) || a.code.localeCompare(b.code))
   }
 
   async search(query: string, limit = 6, courseCode?: string): Promise<SearchHit[]> {

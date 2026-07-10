@@ -1947,6 +1947,14 @@ a.source-line-title:hover {
 .proj-back {
   display: inline-flex;
   align-items: center;
+  gap: 2px;
+  padding: 4px 10px 4px 6px;
+  color: var(--muted);
+  flex-shrink: 0;
+}
+.proj-back {
+  display: inline-flex;
+  align-items: center;
   gap: 5px;
   padding: 6px 10px;
 }
