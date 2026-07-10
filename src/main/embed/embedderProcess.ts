@@ -7,6 +7,12 @@
 process.on('uncaughtException', (e) => console.error('[embedder-child] uncaughtException:', e))
 process.on('unhandledRejection', (e) => console.error('[embedder-child] unhandledRejection:', e))
 
+// If the parent dies (crash, force-quit), the IPC channel disconnects — exit
+// instead of lingering. Windows does NOT kill children with their parent; an
+// orphaned node.exe blocked the very first installer upgrade ("PGP Guide
+// cannot be closed" with nothing visible in the taskbar).
+process.on('disconnect', () => process.exit(0))
+
 type Req = { id: number; texts: string[] }
 
 type Core = typeof import('./nomicCore')

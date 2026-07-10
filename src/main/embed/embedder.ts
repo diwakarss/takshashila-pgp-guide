@@ -116,7 +116,16 @@ class NodeChildEmbedder implements Embedder {
     const [v] = await this.request([QUERY_PREFIX + text])
     return v
   }
+
+  /** Kill the child on app quit — Windows never reaps orphans by itself. */
+  shutdown(): void {
+    if (!this.child) return
+    const child = this.child
+    this.child = null
+    child.removeAllListeners('exit')
+    child.kill()
+  }
 }
 
 /** App-wide embedder: runs the model in a system-node child process. */
-export const nomicEmbedder: Embedder = new NodeChildEmbedder()
+export const nomicEmbedder = new NodeChildEmbedder()

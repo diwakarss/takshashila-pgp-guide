@@ -5,6 +5,7 @@ import { IPC, type AppInfo } from '../shared/ipc'
 import { studyBrain } from './services/studyBrain'
 import { setSettings, publicSettings } from './services/settings'
 import { ping } from './services/telemetry'
+import { nomicEmbedder } from './embed/embedder'
 import { saveApiKey, clearApiKey, maskedApiKey } from './services/apiKeys'
 import { agentCliEngine } from './engine/agentCli'
 import { activeEngine, ENGINES, engineById } from './engine/registry'
@@ -1359,4 +1360,10 @@ app.whenReady().then(() => {
 app.on('window-all-closed', () => {
   // macOS apps usually stay alive until Cmd+Q; everywhere else, quit.
   if (process.platform !== 'darwin') app.quit()
+})
+
+app.on('will-quit', () => {
+  // Reap the embedder child — Windows never kills children with the parent,
+  // and an orphaned node.exe blocked the first installer upgrade.
+  nomicEmbedder.shutdown()
 })
