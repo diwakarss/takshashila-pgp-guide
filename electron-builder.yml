@@ -44,4 +44,9 @@ nsis:
   oneClick: true
   perMachine: false # per-user install: writable dir, no admin prompt
 
-publish: null
+# Auto-update feed (Windows only for now — macOS's updater requires signed
+# builds). The app polls the corpus Worker, which proxies the latest GitHub
+# release with a server-side token; latest.yml must be attached to releases.
+publish:
+  provider: generic
+  url: https://pgp-corpus.diwakar-s-s.workers.dev/update

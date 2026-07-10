@@ -3,7 +3,7 @@ import { join } from 'path'
 import { copyFileSync, mkdirSync, writeFileSync, readFileSync } from 'node:fs'
 import { IPC, type AppInfo } from '../shared/ipc'
 import { studyBrain } from './services/studyBrain'
-import { setSettings, publicSettings } from './services/settings'
+import { setSettings, getSettings, publicSettings } from './services/settings'
 import { ping } from './services/telemetry'
 import { nomicEmbedder } from './embed/embedder'
 import { saveApiKey, clearApiKey, maskedApiKey } from './services/apiKeys'
@@ -470,6 +470,28 @@ app.whenReady().then(() => {
   registerIpc()
   createWindow()
   ping('launch') // anonymous, opt-in (settings.metrics), no-op in dev without PGP_TELEMETRY_URL
+
+  // Auto-update — Windows only: macOS's updater refuses unsigned builds, so
+  // Mac users update from the releases page until we sign. The feed is the
+  // corpus Worker (private-release proxy), authed with the class passphrase.
+  if (process.platform === 'win32' && app.isPackaged) {
+    void (async () => {
+      try {
+        const { autoUpdater } = await import('electron-updater')
+        const key = getSettings().corpusKey
+        if (!key) return
+        autoUpdater.requestHeaders = { authorization: `Bearer ${key}` }
+        autoUpdater.autoDownload = true
+        autoUpdater.autoInstallOnAppQuit = true // installs silently when the student quits
+        await autoUpdater.checkForUpdatesAndNotify({
+          title: 'PGP Guide updated',
+          body: 'A new version downloaded — it installs when you close the app.'
+        })
+      } catch (e) {
+        console.error('[update] check failed:', e instanceof Error ? e.message : e)
+      }
+    })()
+  }
 
   if (process.env['PGP_DEV_BUILD_LIBRARY']) {
     void buildLibrary().catch((e) => console.error('[lib] build failed:', e))
