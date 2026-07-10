@@ -232,7 +232,8 @@ function CourseLibrary(props: { status: SystemStatus }): JSX.Element {
             <div className="progress-fill" style={{ width: `${pct}%` }} />
           </div>
           <p className="muted small">
-            {progress.index} / {progress.total} · {progress.file}
+            {progress.index} / {progress.total} ·{' '}
+            {progress.skipped ? 'checking library (already up to date)…' : progress.file}
           </p>
         </div>
       )}

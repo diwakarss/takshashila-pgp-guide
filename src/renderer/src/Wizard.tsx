@@ -190,7 +190,7 @@ function ImportLibrary({ onBack, onNext }: { onBack: () => void; onNext: () => v
             <div className="progress-fill" style={{ width: `${pct}%` }} />
           </div>
           <p className="muted small">
-            {progress ? `Importing ${progress.index}/${progress.total} — ${progress.file}` : 'Starting…'}
+            {progress ? `Importing ${progress.index}/${progress.total} — ${progress.skipped ? 'checking (already imported)…' : progress.file}` : 'Starting…'}
           </p>
         </div>
       ) : (
