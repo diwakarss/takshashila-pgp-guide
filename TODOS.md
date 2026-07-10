@@ -126,7 +126,7 @@ mis-spawned .cmd shim would be a first-run dead end.
 (PGP_DEV_FAKE_MISSING), install handoffs for all three paths, claude/codex
 detection + sign-in, one tutor ask per engine, Ollama pull + smoke.
 
-## Corpus distribution for students (delivery infra decision)
+## ~~Corpus distribution for students~~ — SHIPPED 2026-07-08 (Cloudflare Worker + KV; see tools/corpus-worker)
 
 **What:** "Get latest classes" syncs by `git pull` of the corpus clone — which
 works for JD (repo access) but students won't have credentials for the private
