@@ -383,6 +383,7 @@ function ProjectGroup(props: {
       <ul className="recents-list">
         {items.length === 0 && <li className="recents-empty">None yet</li>}
         {items.map((p) => {
+          const done = p.progress >= 1
           const days = p.dueAt ? Math.ceil((new Date(p.dueAt).getTime() - Date.now()) / 86_400_000) : null
           const due =
             days === null ? null : days < 0 ? 'overdue' : days === 0 ? 'due today' : `due in ${days}d`
@@ -394,11 +395,17 @@ function ProjectGroup(props: {
                 onClick={() => onOpen(p)}
               >
                 <span className="nb-recent-title">{p.title}</span>
-                <span className="nb-recent-meta">
-                  {[p.courseCode, due, p.started ? `${Math.round(p.progress * 100)}%` : null]
-                    .filter(Boolean)
-                    .join(' · ') || p.deliverable}
-                </span>
+                {done ? (
+                  <span className="nb-recent-meta proj-done-meta">
+                    {[p.courseCode, 'Completed ✓'].filter(Boolean).join(' · ')}
+                  </span>
+                ) : (
+                  <span className="nb-recent-meta">
+                    {[p.courseCode, due, p.started ? `${Math.round(p.progress * 100)}%` : null]
+                      .filter(Boolean)
+                      .join(' · ') || p.deliverable}
+                  </span>
+                )}
               </button>
             </li>
           )

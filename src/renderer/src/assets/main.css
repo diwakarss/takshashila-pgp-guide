@@ -1920,6 +1920,25 @@ a.source-line-title:hover {
   font-size: 12px;
   color: var(--muted);
 }
+/* Completed projects: green accent instead of the projects purple. */
+.proj-card.done {
+  border-left-color: var(--success);
+}
+.proj-card.done:hover {
+  border-color: color-mix(in srgb, var(--success) 45%, var(--hairline));
+  border-left-color: var(--success);
+}
+.proj-done-badge {
+  font-weight: 500;
+  white-space: nowrap;
+  color: var(--success);
+}
+.proj-progress.done > span {
+  background: var(--success);
+}
+.proj-done-meta {
+  color: var(--success);
+}
 .proj-new {
   display: flex;
   gap: 8px;

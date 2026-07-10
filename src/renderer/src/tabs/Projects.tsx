@@ -106,7 +106,9 @@ function Welcome({ onOpen, onChanged }: { onOpen: (id: string) => void; onChange
     }
   }
 
-  const upNext = overview ? [...overview.assignments].sort((a, b) => ((a.dueAt ?? '9') < (b.dueAt ?? '9') ? -1 : 1)) : []
+  const assignments = overview ? [...overview.assignments].sort((a, b) => ((a.dueAt ?? '9') < (b.dueAt ?? '9') ? -1 : 1)) : []
+  const upNext = assignments.filter((a) => a.progress < 1)
+  const completed = assignments.filter((a) => a.progress >= 1)
 
   return (
     <div className="surface proj-welcome">
@@ -161,6 +163,29 @@ function Welcome({ onOpen, onChanged }: { onOpen: (id: string) => void; onChange
                 </button>
               )
             })}
+          </div>
+        </section>
+      )}
+
+      {completed.length > 0 && (
+        <section className="proj-group">
+          <div className="recents-label">Completed</div>
+          <div className="proj-cards">
+            {completed.map((a) => (
+              <button key={a.id} className="proj-card done" onClick={() => void openItem(a)}>
+                <div className="proj-card-top">
+                  <span className="proj-card-title">{a.title}</span>
+                  {a.courseCode && <span className="proj-course">{a.courseCode}</span>}
+                </div>
+                <div className="proj-card-meta">
+                  <span>{a.deliverable}</span>
+                  <span className="proj-done-badge">✓ Completed</span>
+                </div>
+                <div className="proj-progress done">
+                  <span style={{ width: '100%' }} />
+                </div>
+              </button>
+            ))}
           </div>
         </section>
       )}
