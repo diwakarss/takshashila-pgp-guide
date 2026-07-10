@@ -203,6 +203,13 @@ function CourseLibrary(props: { status: SystemStatus }): JSX.Element {
     setKeySaved(s.corpusKey ?? '')
     setKeyInput(s.corpusKey ?? '')
   }
+  // Empty is never a valid state (the app always needs some key), so "clear"
+  // means "back to the passphrase that ships in the app".
+  const resetKey = async (): Promise<void> => {
+    const s = await window.pgp.setSettings({ corpusKey: null })
+    setKeySaved(s.corpusKey ?? '')
+    setKeyInput(s.corpusKey ?? '')
+  }
   const canSync = (corpus?.hasLocalCorpus ?? false) || !!keySaved
 
   return (
@@ -258,10 +265,13 @@ function CourseLibrary(props: { status: SystemStatus }): JSX.Element {
             <button className="btn" disabled={!keyDirty} onClick={() => void saveKey()}>
               Save
             </button>
+            <button className="btn" onClick={() => void resetKey()}>
+              Reset to built-in
+            </button>
           </div>
           <p className="muted small">
             The class passphrase unlocks course downloads. It ships built into the app — students never type
-            it. Change it here only if the class announces a new one.
+            it. Change it only if the class announces a new one; Reset restores the built-in passphrase.
           </p>
         </>
       )}
