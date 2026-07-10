@@ -1,6 +1,6 @@
 {
   "name": "pgp-guide",
-  "version": "0.1.7",
+  "version": "0.1.8",
   "description": "Takshashila PGP Guide — local-first AI study companion for the PGP cohort",
   "main": "./out/main/index.js",
   "author": "Diwakar",

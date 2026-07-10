@@ -1,11 +1,18 @@
 import { app, shell, BrowserWindow, ipcMain } from 'electron'
 import { join } from 'path'
-import { copyFileSync, mkdirSync, writeFileSync, readFileSync } from 'node:fs'
+import { appendFileSync, copyFileSync, mkdirSync, writeFileSync, readFileSync } from 'node:fs'
 import { IPC, type AppInfo } from '../shared/ipc'
 import { studyBrain } from './services/studyBrain'
 import { setSettings, getSettings, publicSettings } from './services/settings'
 import { ping } from './services/telemetry'
 import { nomicEmbedder } from './embed/embedder'
+// electron-updater is CJS with getter-defined exports: BOTH import() and a
+// static ESM import deliver autoUpdater === undefined in our ESM main bundle
+// (the updater died silently on every packaged launch, v0.1.4-0.1.7). An
+// honest require() is the only interop-proof load — verified inside Electron.
+import { createRequire } from 'node:module'
+const requireCjs = createRequire(import.meta.url)
+const { autoUpdater } = requireCjs('electron-updater') as typeof import('electron-updater')
 import { saveApiKey, clearApiKey, maskedApiKey } from './services/apiKeys'
 import { agentCliEngine } from './engine/agentCli'
 import { activeEngine, ENGINES, engineById } from './engine/registry'
@@ -475,6 +482,8 @@ app.on('second-instance', () => {
 })
 
 app.whenReady().then(() => {
+  // Windows ties notifications and taskbar identity to this id (= appId).
+  if (process.platform === 'win32') app.setAppUserModelId('net.takshashila.pgp-guide')
   registerIpc()
   createWindow()
   ping('launch') // anonymous, opt-in (settings.metrics), no-op in dev without PGP_TELEMETRY_URL
@@ -485,23 +494,39 @@ app.whenReady().then(() => {
   // When the download lands, the renderer shows a quiet Later/Restart toast;
   // "Later" still installs on quit via autoInstallOnAppQuit.
   if (process.platform === 'win32' && app.isPackaged) {
+    // Every step lands in userData/update.log — the updater failed silently
+    // once (invisible console in packaged builds); never again.
+    const updateLog = (msg: string): void => {
+      try {
+        appendFileSync(join(app.getPath('userData'), 'update.log'), `${new Date().toISOString()} ${msg}\n`)
+      } catch {
+        /* logging must never break the app */
+      }
+    }
     void (async () => {
       try {
-        const { autoUpdater } = await import('electron-updater')
         const key = getSettings().corpusKey
-        if (!key) return
+        if (!key) {
+          updateLog('no corpus key — skipping update check')
+          return
+        }
         autoUpdater.requestHeaders = { authorization: `Bearer ${key}` }
         autoUpdater.autoDownload = true
         autoUpdater.autoInstallOnAppQuit = true
+        autoUpdater.on('error', (e) => updateLog(`error: ${e.message}`))
+        autoUpdater.on('update-available', (info) => updateLog(`update available: ${info.version}`))
+        autoUpdater.on('update-not-available', () => updateLog('up to date'))
         autoUpdater.on('update-downloaded', (info) => {
+          updateLog(`downloaded: ${info.version}`)
           installUpdateNow = () => autoUpdater.quitAndInstall(true, true) // silent + relaunch
           for (const w of BrowserWindow.getAllWindows()) {
             if (!w.isDestroyed()) w.webContents.send(IPC.updateReady, { version: info.version })
           }
         })
+        updateLog(`checking (current ${app.getVersion()})…`)
         await autoUpdater.checkForUpdates()
       } catch (e) {
-        console.error('[update] check failed:', e instanceof Error ? e.message : e)
+        updateLog(`check failed: ${e instanceof Error ? e.message : String(e)}`)
       }
     })()
   }
