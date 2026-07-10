@@ -48,8 +48,11 @@ export function App(): JSX.Element {
     }
   }, [onboarded, status.stats])
 
+  const refreshCourses = (): void => {
+    void window.pgp.courses().then(setCourses)
+  }
   useEffect(() => {
-    if (status.ready) void window.pgp.courses().then(setCourses)
+    if (status.ready) refreshCourses()
   }, [status.ready])
 
   // Recents are shown for the active conversational tab, so opening one stays in
@@ -118,6 +121,7 @@ export function App(): JSX.Element {
         engine={status.engine}
         stats={status.stats}
         refreshStats={status.refresh}
+        onCorpusSynced={refreshCourses}
         openThreadId={activeOpenThreadId}
         threadsVersion={threadsVersion}
         quizStatsVersion={quizStatsVersion}
@@ -184,7 +188,7 @@ export function App(): JSX.Element {
               onChanged={() => setProjectsVersion((v) => v + 1)}
             />
           )}
-          {tab === 'settings' && <Settings status={status} />}
+          {tab === 'settings' && <Settings status={status} onCorpusSynced={refreshCourses} />}
         </main>
       </div>
     </div>

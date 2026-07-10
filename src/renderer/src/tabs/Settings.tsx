@@ -4,8 +4,8 @@ import type { AppInfo, AppSettings, ImportProgress } from '../../../shared/ipc'
 import type { SystemStatus } from '../hooks/useSystemStatus'
 
 // Settings — your AI, course library, privacy, setup, about.
-export function Settings(props: { status: SystemStatus }): JSX.Element {
-  const { status } = props
+export function Settings(props: { status: SystemStatus; onCorpusSynced: () => void }): JSX.Element {
+  const { status, onCorpusSynced } = props
   const [info, setInfo] = useState<AppInfo | null>(null)
   const [settings, setSettings] = useState<AppSettings | null>(null)
   useEffect(() => {
@@ -35,7 +35,7 @@ export function Settings(props: { status: SystemStatus }): JSX.Element {
 
       <YourAI status={status} />
 
-      <CourseLibrary status={status} />
+      <CourseLibrary status={status} onCorpusSynced={onCorpusSynced} />
 
       <section className="card">
         <h2>Privacy</h2>
@@ -136,8 +136,8 @@ function YourAI({ status }: { status: SystemStatus }): JSX.Element {
   )
 }
 
-function CourseLibrary(props: { status: SystemStatus }): JSX.Element {
-  const { status } = props
+function CourseLibrary(props: { status: SystemStatus; onCorpusSynced: () => void }): JSX.Element {
+  const { status, onCorpusSynced } = props
   const [busy, setBusy] = useState(false)
   const [progress, setProgress] = useState<ImportProgress | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -156,6 +156,7 @@ function CourseLibrary(props: { status: SystemStatus }): JSX.Element {
     try {
       await window.pgp.importCorpus()
       await status.refresh()
+      onCorpusSynced()
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e))
     } finally {
@@ -169,6 +170,7 @@ function CourseLibrary(props: { status: SystemStatus }): JSX.Element {
     try {
       const r = await window.pgp.syncCorpus()
       await status.refresh()
+      onCorpusSynced() // new/renamed courses appear without an app restart
       setSynced(
         r.pages > 0
           ? `${r.pages} new or updated lesson${r.pages === 1 ? '' : 's'} added.`

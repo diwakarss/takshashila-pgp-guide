@@ -21,6 +21,7 @@ export function Sidebar(props: {
   engine: EngineStatus | null
   stats: BrainStats | null
   refreshStats: () => Promise<void>
+  onCorpusSynced: () => void
   openThreadId: string | null
   threadsVersion: number
   quizStatsVersion: number
@@ -40,6 +41,7 @@ export function Sidebar(props: {
     engine,
     stats,
     refreshStats,
+    onCorpusSynced,
     openThreadId,
     threadsVersion,
     quizStatsVersion,
@@ -102,6 +104,7 @@ export function Sidebar(props: {
     try {
       await window.pgp.syncCorpus()
       await refreshStats()
+      onCorpusSynced() // new/renamed courses appear without an app restart
       const u = await window.pgp.corpusUpdates()
       setUpdates(u.pending + u.behind)
       setSyncState('done')
