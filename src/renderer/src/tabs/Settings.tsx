@@ -186,19 +186,24 @@ function CourseLibrary(props: { status: SystemStatus }): JSX.Element {
   const already = (status.stats?.chunks ?? 0) > 0
   const pct = progress ? Math.round((progress.index / progress.total) * 100) : 0
 
-  // Class passphrase (students): unlocks downloading classes from the corpus
-  // server when there's no local corpus folder on this machine.
-  const [keySet, setKeySet] = useState(false)
+  // Class passphrase: gates corpus downloads from the class server. A default
+  // ships baked into the app (students never type it); this field shows the
+  // active value and lets it be overridden (rotation) or reset.
+  const [keySaved, setKeySaved] = useState('')
   const [keyInput, setKeyInput] = useState('')
   useEffect(() => {
-    void window.pgp.getSettings().then((s) => setKeySet(!!s.corpusKey))
+    void window.pgp.getSettings().then((s) => {
+      setKeySaved(s.corpusKey ?? '')
+      setKeyInput(s.corpusKey ?? '')
+    })
   }, [])
+  const keyDirty = keyInput.trim() !== keySaved
   const saveKey = async (): Promise<void> => {
-    await window.pgp.setSettings({ corpusKey: keyInput.trim() || null })
-    setKeySet(!!keyInput.trim())
-    setKeyInput('')
+    const s = await window.pgp.setSettings({ corpusKey: keyInput.trim() || null })
+    setKeySaved(s.corpusKey ?? '')
+    setKeyInput(s.corpusKey ?? '')
   }
-  const canSync = (corpus?.hasLocalCorpus ?? false) || keySet
+  const canSync = (corpus?.hasLocalCorpus ?? false) || !!keySaved
 
   return (
     <section className="card">
@@ -228,7 +233,7 @@ function CourseLibrary(props: { status: SystemStatus }): JSX.Element {
 
       {!busy && (
         <div className="row gap">
-          {(already || (!corpus?.hasLocalCorpus && keySet)) && (
+          {(already || (!corpus?.hasLocalCorpus && !!keySaved)) && (
             <button className="btn primary" disabled={!canSync} onClick={sync}>
               Get latest classes
             </button>
@@ -241,18 +246,24 @@ function CourseLibrary(props: { status: SystemStatus }): JSX.Element {
         </div>
       )}
       {!busy && (
-        <div className="row gap" style={{ marginTop: 8 }}>
-          <input
-            className="input"
-            type="password"
-            placeholder={keySet ? 'Class passphrase (saved)' : 'Class passphrase'}
-            value={keyInput}
-            onChange={(e) => setKeyInput(e.target.value)}
-          />
-          <button className="btn" disabled={!keyInput.trim() && !keySet} onClick={() => void saveKey()}>
-            {keyInput.trim() ? 'Save' : keySet ? 'Clear' : 'Save'}
-          </button>
-        </div>
+        <>
+          <div className="row gap" style={{ marginTop: 8 }}>
+            <input
+              className="input"
+              type="text"
+              placeholder="Class passphrase"
+              value={keyInput}
+              onChange={(e) => setKeyInput(e.target.value)}
+            />
+            <button className="btn" disabled={!keyDirty} onClick={() => void saveKey()}>
+              Save
+            </button>
+          </div>
+          <p className="muted small">
+            The class passphrase unlocks course downloads. It ships built into the app — students never type
+            it. Change it here only if the class announces a new one.
+          </p>
+        </>
       )}
       {!busy && (
         <p className="muted small">

@@ -122,12 +122,18 @@ function ImportLibrary({ onBack, onNext }: { onBack: () => void; onNext: () => v
   }
 
   // Student path: no course files on this machine yet — download them from
-  // the class server with the passphrase from the welcome email, then import.
+  // the class server. The passphrase ships baked into the app, so this is
+  // one click; the input only appears if no key is available (rotation edge).
+  const [hasKey, setHasKey] = useState(true)
+  useEffect(() => {
+    void window.pgp.getSettings().then((s) => setHasKey(!!s.corpusKey))
+  }, [])
+
   const runDownload = async (): Promise<void> => {
     setImporting(true)
     setError(null)
     try {
-      await window.pgp.setSettings({ corpusKey: passphrase.trim() })
+      if (passphrase.trim()) await window.pgp.setSettings({ corpusKey: passphrase.trim() })
       await window.pgp.syncCorpus()
       setDone(true)
     } catch (e) {
@@ -154,20 +160,26 @@ function ImportLibrary({ onBack, onNext }: { onBack: () => void; onNext: () => v
         </p>
       ) : !status?.hasLocalCorpus && !importing ? (
         <div className="wizard-import">
-          <p className="muted small">
-            Enter the class passphrase from your welcome email to download the course library.
-          </p>
-          <input
-            className="input"
-            type="password"
-            placeholder="Class passphrase"
-            value={passphrase}
-            onChange={(e) => setPassphrase(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter' && passphrase.trim()) void runDownload()
-            }}
-          />
-          <button className="btn primary" disabled={!passphrase.trim()} onClick={() => void runDownload()}>
+          {hasKey ? (
+            <p className="muted small">Your class access is built in — one click downloads everything.</p>
+          ) : (
+            <>
+              <p className="muted small">
+                Enter the class passphrase from your welcome email to download the course library.
+              </p>
+              <input
+                className="input"
+                type="text"
+                placeholder="Class passphrase"
+                value={passphrase}
+                onChange={(e) => setPassphrase(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && passphrase.trim()) void runDownload()
+                }}
+              />
+            </>
+          )}
+          <button className="btn primary" disabled={!hasKey && !passphrase.trim()} onClick={() => void runDownload()}>
             Download the course library
           </button>
           {error && <p className="banner danger">{error}</p>}

@@ -12,6 +12,11 @@ import { dirname, join } from 'node:path'
 
 export const CORPUS_URL_DEFAULT = 'https://pgp-corpus.diwakar-s-s.workers.dev'
 
+// The cohort passphrase, baked into the build so students never type it
+// (JD's call: the app itself is only distributed to the cohort). Saving a
+// value in Settings overrides this — that's the rotation path.
+export const CORPUS_KEY_DEFAULT = '09c6887115eed022a8cceecba5d7ff77'
+
 export function corpusRemoteUrl(): string {
   return process.env['PGP_CORPUS_URL'] ?? CORPUS_URL_DEFAULT
 }

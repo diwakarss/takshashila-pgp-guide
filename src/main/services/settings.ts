@@ -1,6 +1,7 @@
 import { app } from 'electron'
 import { join } from 'node:path'
 import { existsSync, readFileSync, writeFileSync } from 'node:fs'
+import { CORPUS_KEY_DEFAULT } from '../corpus/remote'
 
 // Small persisted app settings (userData/settings.json). Keeps the onboarding
 // flag + a few preferences that aren't part of the brain. Read/written
@@ -28,7 +29,9 @@ const DEFAULTS: StoredSettings = {
   claudeBin: null,
   codexBin: null,
   localModel: null,
-  corpusKey: null,
+  // Baked cohort passphrase: students get corpus downloads with zero typing.
+  // A value saved in Settings (or cleared back to this) overrides per-machine.
+  corpusKey: CORPUS_KEY_DEFAULT,
   apiKeys: {}
 }
 
@@ -39,7 +42,10 @@ function file(): string {
 export function getSettings(): StoredSettings {
   try {
     if (existsSync(file())) {
-      return { ...DEFAULTS, ...(JSON.parse(readFileSync(file(), 'utf8')) as Partial<StoredSettings>) }
+      const merged = { ...DEFAULTS, ...(JSON.parse(readFileSync(file(), 'utf8')) as Partial<StoredSettings>) }
+      // Clearing the passphrase means "back to the baked default", not "no key".
+      if (!merged.corpusKey) merged.corpusKey = CORPUS_KEY_DEFAULT
+      return merged
     }
   } catch {
     /* corrupt file → fall back to defaults */

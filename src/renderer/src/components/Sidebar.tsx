@@ -90,9 +90,15 @@ export function Sidebar(props: {
     }
   }, [])
 
+  const [syncProg, setSyncProg] = useState<{ index: number; total: number } | null>(null)
+
   const syncNow = async (): Promise<void> => {
     if (syncState === 'busy') return
     setSyncState('busy')
+    setSyncProg(null)
+    // Live progress in the pill — a first sync can embed for many minutes and
+    // a bare spinner reads as a hang.
+    const off = window.pgp.onImportProgress((p) => setSyncProg({ index: p.index, total: p.total }))
     try {
       await window.pgp.syncCorpus()
       await refreshStats()
@@ -102,6 +108,9 @@ export function Sidebar(props: {
       setTimeout(() => setSyncState('idle'), 4000)
     } catch {
       setSyncState('idle')
+    } finally {
+      off()
+      setSyncProg(null)
     }
   }
 
@@ -331,7 +340,8 @@ export function Sidebar(props: {
               >
                 {syncState === 'busy' ? (
                   <>
-                    <RefreshCw size={12} className="spin" /> Adding…
+                    <RefreshCw size={12} className="spin" />{' '}
+                    {syncProg ? `Adding ${syncProg.index}/${syncProg.total}` : 'Adding…'}
                   </>
                 ) : syncState === 'done' ? (
                   <>✓ Up to date</>
