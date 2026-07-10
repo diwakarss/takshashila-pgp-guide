@@ -123,7 +123,7 @@ function Welcome({ onOpen, onChanged }: { onOpen: (id: string) => void; onChange
             <strong>Pick a project</strong> from the left — an assignment, your capstone, or a personal piece.
           </li>
           <li>
-            <strong>Work step by step.</strong> Each of the 8 steps opens a discussion: the coach does the legwork
+            <strong>Work step by step.</strong> Each step opens a discussion: the coach does the legwork
             (researching the brief, suggesting sources, proposing criteria) and you think it through together.
           </li>
           <li>

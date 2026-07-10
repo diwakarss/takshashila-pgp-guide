@@ -15,7 +15,7 @@
 //          npx wrangler kv namespace create CORPUS     (once; id → wrangler.toml)
 //          npx wrangler secret put CORPUS_KEY          (once)
 
-const ALLOWED = /^(manifest\.json$|pgp\/[\w.-]+$|illustrations\/[\w./-]+$)/
+const ALLOWED = /^(manifest\.json$|assignments\.json$|pgp\/[\w.-]+$|illustrations\/[\w./-]+$)/
 
 export default {
   async fetch(req, env) {

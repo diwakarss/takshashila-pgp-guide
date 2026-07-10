@@ -51,11 +51,14 @@ import type {
 } from '../../shared/ipc'
 import { planSteps } from '../../shared/ipc'
 
-// Pre-loaded assignments (would sync from Open Takshashila later). Opening one
-// creates its workspace on first open, keyed by the stable catalog id.
+// Hand-tuned assignments (better titles/briefs/plans than auto-discovery can
+// derive). The weekly ingest also writes the corpus's assignments.json — new
+// assignments appear from there automatically; these builtins win on mightyId.
+// Opening one creates its workspace on first open, keyed by the catalog id.
 const PROJECT_CATALOG = [
   {
     id: 'pp231-iran-demand-supply',
+    mightyId: 103328201,
     kind: 'assignment' as const,
     title: 'Understanding the Shifts in Demand and Supply',
     courseCode: 'PP231',
@@ -70,6 +73,7 @@ const PROJECT_CATALOG = [
   },
   {
     id: 'pp221-policy-that-worked',
+    mightyId: 103328218,
     kind: 'assignment' as const,
     title: 'A Policy That Worked Well',
     courseCode: 'PP221',
@@ -83,6 +87,8 @@ const PROJECT_CATALOG = [
       'Pick a policy that you think has worked well (100 words). Drawing on concepts from the four PP221 webinars, identify 3 things that explain why it worked well (500 words). Identify at least 1 thing that could be done differently to make it work better — an addition, a subtraction, or a change in how something was done (300 words). Identify at least one possible unintended consequence of this policy; how could it be avoided or mitigated, and would the mitigation have unintended consequences of its own? (300 words). Individual work; submit as PDF by replying to the assignment email thread (pgp@takshashila.org.in) with the anti-plagiarism and AI-use disclaimers.'
   }
 ]
+type CatalogEntry = (typeof PROJECT_CATALOG)[number] & { plan?: string }
+
 const CAPSTONE_ITEM = {
   id: 'capstone',
   kind: 'capstone' as const,
@@ -420,11 +426,33 @@ class StudyBrainService {
 
   // ── projects ──────────────────────────────────────────────────────────
 
+  /**
+   * The assignment catalog: hand-tuned builtins + whatever the corpus's
+   * assignments.json delivers (written by the weekly ingest, synced with
+   * "Get latest classes"). Builtins win on mightyId; file-only entries are
+   * new assignments that arrive with zero app changes.
+   */
+  assignmentCatalog(): CatalogEntry[] {
+    const out: CatalogEntry[] = [...PROJECT_CATALOG]
+    try {
+      const file = join(dirname(this.corpusDir()), 'assignments.json')
+      if (existsSync(file)) {
+        const known = new Set(PROJECT_CATALOG.map((c) => c.mightyId))
+        for (const a of JSON.parse(readFileSync(file, 'utf8')) as (CatalogEntry & { mightyId: number })[]) {
+          if (a?.id && a?.title && !known.has(a.mightyId)) out.push({ ...a, kind: 'assignment' })
+        }
+      }
+    } catch (e) {
+      console.error('[pgp] assignments.json unreadable:', e)
+    }
+    return out
+  }
+
   async projectsOverview(): Promise<ProjectsOverview> {
     const brain = await this.open()
     const started = await brain.listProjects()
     const byId = new Map(started.map((p) => [p.id, p]))
-    const toItem = (base: (typeof PROJECT_CATALOG)[number] | typeof CAPSTONE_ITEM): ProjectListItem => {
+    const toItem = (base: CatalogEntry | typeof CAPSTONE_ITEM): ProjectListItem => {
       const p = byId.get(base.id)
       return {
         id: base.id,
@@ -453,7 +481,7 @@ class StudyBrainService {
         progress: p.done.length / planSteps(p.plan).length,
         updatedAt: p.updatedAt
       }))
-    return { assignments: PROJECT_CATALOG.map(toItem), capstone: toItem(CAPSTONE_ITEM), personal }
+    return { assignments: this.assignmentCatalog().map(toItem), capstone: toItem(CAPSTONE_ITEM), personal }
   }
 
   /** Open (creating on first open from the catalog) a project by id. */
@@ -461,7 +489,7 @@ class StudyBrainService {
     const brain = await this.open()
     const existing = await brain.getProject(id)
     if (existing) return existing
-    const cat = [...PROJECT_CATALOG, CAPSTONE_ITEM].find((c) => c.id === id)
+    const cat = [...this.assignmentCatalog(), CAPSTONE_ITEM].find((c) => c.id === id)
     if (!cat) return null
     return brain.createProject({
       id: cat.id,
