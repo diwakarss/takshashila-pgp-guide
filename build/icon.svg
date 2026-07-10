@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 200 200">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#24528f"/>
+      <stop offset="1" stop-color="#152e54"/>
+    </linearGradient>
+  </defs>
+  <!-- Apple-proportioned tile: ~80% of canvas, transparent margins -->
+  <rect x="20" y="20" width="160" height="160" rx="37" fill="url(#bg)"/>
+  <!-- open book -->
+  <path d="M56 124 C73 115 90 115 100 122 C110 115 127 115 144 124 L144 133 C127 124 110 124 100 131 C90 124 73 124 56 133 Z" fill="#faf7f0"/>
+  <path d="M100 122 L100 131" stroke="#152e54" stroke-width="1.8"/>
+  <!-- compass above -->
+  <g transform="translate(100,86)">
+    <circle r="26" fill="none" stroke="#faf7f0" stroke-width="4.6"/>
+    <path d="M0 -17.5 L7 7 L0 1.6 L-7 7 Z" fill="#eda100"/>
+  </g>
+</svg>
