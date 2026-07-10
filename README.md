@@ -85,6 +85,8 @@ curl -sL -o build/node/win-x64/node.exe "https://nodejs.org/dist/$V/win-x64/node
 
 npm run build:mac    # dmg (arm64)
 npm run build:win    # NSIS (x64), cross-built on macOS
+                     # (build:win first vendors sharp's win32-x64 binary — npm keeps
+                     #  only the current platform's, which shipped a broken v0.1.0)
 ```
 
 Then attach the artifacts in `dist-installers/` to a GitHub release. Builds are
