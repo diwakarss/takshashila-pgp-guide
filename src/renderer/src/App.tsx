@@ -17,6 +17,8 @@ import type { CourseSummary } from '../../shared/ipc'
 export function App(): JSX.Element {
   const [tab, setTab] = useState<TabId>('tutor')
   const status = useSystemStatus()
+  const [updateVersion, setUpdateVersion] = useState<string | null>(null)
+  useEffect(() => window.pgp.onUpdateReady((info) => setUpdateVersion(info.version)), [])
   const [openThreadId, setOpenThreadId] = useState<string | null>(null)
   const [openResearchId, setOpenResearchId] = useState<string | null>(null)
   const [openNotebookId, setOpenNotebookId] = useState<string | null>(null)
@@ -94,6 +96,22 @@ export function App(): JSX.Element {
 
   return (
     <div className="shell">
+      {updateVersion && (
+        <div className="update-toast" role="status">
+          <span className="update-toast-text">
+            A new update is available <span className="update-toast-ver">v{updateVersion}</span>
+          </span>
+          <button className="update-toast-btn" onClick={() => setUpdateVersion(null)}>
+            Later
+          </button>
+          <button className="update-toast-btn primary" onClick={() => void window.pgp.updateRestart()}>
+            Restart
+          </button>
+          <button className="update-toast-x" aria-label="Dismiss" onClick={() => setUpdateVersion(null)}>
+            ×
+          </button>
+        </div>
+      )}
       <Sidebar
         active={tab}
         onNavigate={setTab}

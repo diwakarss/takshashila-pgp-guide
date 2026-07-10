@@ -131,7 +131,16 @@ const api = {
     const handler = (_e: IpcRendererEvent, p: ImportProgress): void => cb(p)
     ipcRenderer.on(IPC.corpusImportProgress, handler)
     return () => ipcRenderer.removeListener(IPC.corpusImportProgress, handler)
-  }
+  },
+
+  /** Subscribe to "an update finished downloading". Returns an unsubscribe fn. */
+  onUpdateReady: (cb: (info: { version: string }) => void): (() => void) => {
+    const handler = (_e: IpcRendererEvent, info: { version: string }): void => cb(info)
+    ipcRenderer.on(IPC.updateReady, handler)
+    return () => ipcRenderer.removeListener(IPC.updateReady, handler)
+  },
+  /** Install the downloaded update and relaunch. */
+  updateRestart: (): Promise<void> => ipcRenderer.invoke(IPC.updateRestart)
 }
 
 export type PgpApi = typeof api

@@ -117,6 +117,10 @@ async function buildLibrary(): Promise<void> {
 // └─────────────────────────────────────────────────────────────────────┘
 
 const isDev = !app.isPackaged
+
+// Set when an auto-update has downloaded; invoked by the renderer's "Restart
+// now" toast button (update:restart). Null until then.
+let installUpdateNow: (() => void) | null = null
 let devWindow: BrowserWindow | null = null
 
 // Dev harnesses run against an ISOLATED data dir (PGP_USERDATA=/tmp/…) so they
@@ -218,6 +222,10 @@ function registerIpc(): void {
     })
   })
   ipcMain.handle(IPC.corpusUpdates, () => studyBrain.corpusUpdates())
+
+  ipcMain.handle(IPC.updateRestart, () => {
+    installUpdateNow?.()
+  })
 
   ipcMain.handle(IPC.engineStatus, async () => {
     const engine = activeEngine()
@@ -474,6 +482,8 @@ app.whenReady().then(() => {
   // Auto-update — Windows only: macOS's updater refuses unsigned builds, so
   // Mac users update from the releases page until we sign. The feed is the
   // corpus Worker (private-release proxy), authed with the class passphrase.
+  // When the download lands, the renderer shows a quiet Later/Restart toast;
+  // "Later" still installs on quit via autoInstallOnAppQuit.
   if (process.platform === 'win32' && app.isPackaged) {
     void (async () => {
       try {
@@ -482,11 +492,14 @@ app.whenReady().then(() => {
         if (!key) return
         autoUpdater.requestHeaders = { authorization: `Bearer ${key}` }
         autoUpdater.autoDownload = true
-        autoUpdater.autoInstallOnAppQuit = true // installs silently when the student quits
-        await autoUpdater.checkForUpdatesAndNotify({
-          title: 'PGP Guide updated',
-          body: 'A new version downloaded — it installs when you close the app.'
+        autoUpdater.autoInstallOnAppQuit = true
+        autoUpdater.on('update-downloaded', (info) => {
+          installUpdateNow = () => autoUpdater.quitAndInstall(true, true) // silent + relaunch
+          for (const w of BrowserWindow.getAllWindows()) {
+            if (!w.isDestroyed()) w.webContents.send(IPC.updateReady, { version: info.version })
+          }
         })
+        await autoUpdater.checkForUpdates()
       } catch (e) {
         console.error('[update] check failed:', e instanceof Error ? e.message : e)
       }

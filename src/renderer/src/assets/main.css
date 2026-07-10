@@ -1570,6 +1570,51 @@ a.source-line-title:hover {
   box-shadow: 0 6px 20px rgba(0, 0, 0, 0.22);
 }
 
+/* Quiet update toast — bottom-right, never blocks work. "Later"/× dismiss;
+   the update still installs on quit either way. */
+.update-toast {
+  position: fixed;
+  right: 20px;
+  bottom: 20px;
+  z-index: 70;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px 10px 16px;
+  background: var(--surface);
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius-card);
+  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.14);
+  font-size: 13px;
+}
+.update-toast-ver {
+  color: var(--muted);
+  margin-left: 2px;
+}
+.update-toast-btn {
+  font: inherit;
+  padding: 5px 12px;
+  border-radius: 999px;
+  border: 1px solid var(--hairline);
+  background: transparent;
+  cursor: pointer;
+}
+.update-toast-btn.primary {
+  background: var(--ink);
+  border-color: var(--ink);
+  color: var(--surface);
+}
+.update-toast-x {
+  font: inherit;
+  font-size: 16px;
+  line-height: 1;
+  padding: 2px 6px;
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+}
+
 /* ── notebook ───────────────────────────────────────────── */
 .notebook {
   display: flex;

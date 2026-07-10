@@ -21,6 +21,11 @@ export const IPC = {
   corpusImport: 'corpus:import',
   /** main → renderer: per-file import progress. */
   corpusImportProgress: 'corpus:import:progress',
+
+  /** main → renderer: an app update finished downloading (payload: version). */
+  updateReady: 'update:ready',
+  /** Install the downloaded update now and relaunch the app. */
+  updateRestart: 'update:restart',
   /** Pull the corpus repo + incrementally import changes (weekly class sync). */
   corpusSync: 'corpus:sync',
   /** Cheap "new classes available?" check for the sidebar badge (no writes). */
