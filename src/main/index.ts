@@ -532,7 +532,33 @@ app.whenReady().then(() => {
   }
 
   if (process.env['PGP_DEV_BUILD_LIBRARY']) {
-    void buildLibrary().catch((e) => console.error('[lib] build failed:', e))
+    // Exits when done so the publish pipeline can chain phases without pkill.
+    void buildLibrary()
+      .catch((e) => console.error('[lib] build failed:', e))
+      .finally(() => app.quit())
+  }
+
+  // Pipeline probe: import the local corpus dir into this (isolated) brain and
+  // exit — the illustration build needs the brain current BEFORE the corpus is
+  // published, so the Worker-download probe (REMOTETEST) can't be used.
+  if (process.env['PGP_DEV_SYNC_LOCAL']) {
+    void (async () => {
+      if (!process.env['PGP_USERDATA']) {
+        console.error('[sync-local] REFUSING without PGP_USERDATA (isolated dir only)')
+        app.quit()
+        return
+      }
+      try {
+        const r = await studyBrain.syncCorpus((p) => {
+          if (p.index % 25 === 0 || p.index === p.total) console.log(`[sync-local] ${p.index}/${p.total}`)
+        })
+        console.log(`[sync-local] PASS ✓ pull=${r.pull} pages=${r.pages} skipped=${r.skipped}`)
+      } catch (e) {
+        console.error('[sync-local] FAIL:', e instanceof Error ? e.message : e)
+      } finally {
+        app.quit()
+      }
+    })()
   }
 
   // Re-probe the timeout class: the research-heavy kickoffs (define, evidence)
@@ -1335,6 +1361,7 @@ app.whenReady().then(() => {
       .publishLibrary()
       .then((r) => console.log(`[lib] published ${r.concepts} concepts, ${r.images} images → ${r.dir}`))
       .catch((e) => console.error('[lib] publish failed:', e))
+      .finally(() => app.quit())
   }
 
   if (process.env['PGP_DEV_QUIZ']) {
