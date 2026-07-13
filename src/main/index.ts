@@ -91,7 +91,16 @@ async function buildLibrary(): Promise<void> {
     console.log('[lib] cleared existing library')
   }
   const max = Number(process.env['PGP_DEV_LIB_MAX'] ?? '12')
-  const courses = (await studyBrain.courses()).filter((c) => c.code !== 'GENERAL')
+  // PGP_DEV_LIB_COURSES=PP228,PP223 restricts extraction — the concept model
+  // re-phrases titles every run, so full re-extraction buys mostly duplicate
+  // drawings. Weekly runs should target only courses with new material.
+  const only = (process.env['PGP_DEV_LIB_COURSES'] ?? '')
+    .split(',')
+    .map((c) => c.trim().toUpperCase())
+    .filter(Boolean)
+  const courses = (await studyBrain.courses()).filter(
+    (c) => c.code !== 'GENERAL' && (only.length === 0 || only.includes(c.code.toUpperCase()))
+  )
   let total = 0
   let generated = 0
   let failed = 0
