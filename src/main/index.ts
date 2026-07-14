@@ -101,6 +101,10 @@ async function buildLibrary(): Promise<void> {
   const courses = (await studyBrain.courses()).filter(
     (c) => c.code !== 'GENERAL' && (only.length === 0 || only.includes(c.code.toUpperCase()))
   )
+  // Hard spend cap per run (~$0.065/image at medium quality) — extraction
+  // drift or a runaway loop can never empty the OpenAI balance again.
+  const budget = Number(process.env['PGP_DEV_LIB_BUDGET'] ?? '1.50')
+  const maxImages = Math.max(1, Math.floor(budget / 0.065))
   let total = 0
   let generated = 0
   let failed = 0
@@ -110,6 +114,10 @@ async function buildLibrary(): Promise<void> {
     const concepts = await extractConcepts(course.name, titles, agentCliEngine, max)
     console.log(`[lib] ${course.code}: ${concepts.length} concepts to draw`)
     for (const c of concepts) {
+      if (generated >= maxImages) {
+        console.log(`[lib] BUDGET CAP: ${generated} images (~$${(generated * 0.065).toFixed(2)}) — stopping; rerun to continue`)
+        break
+      }
       const before = await studyBrain.conceptCount()
       const res = await studyBrain.resolveIllustration(c, course.code)
       const after = await studyBrain.conceptCount()
