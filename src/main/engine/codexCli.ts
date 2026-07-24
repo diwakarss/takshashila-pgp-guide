@@ -5,6 +5,7 @@ import { randomUUID } from 'node:crypto'
 import type { Engine, EngineCapabilities, EngineMessage } from './types'
 import { flatten, run } from './proc'
 import { resolveBin } from './resolve'
+import { codexAccount } from './accounts'
 
 // Drives the student's ChatGPT subscription via the Codex CLI in non-
 // interactive mode. Verified recipe (codex-cli 0.142):
@@ -29,12 +30,14 @@ export class CodexCliEngine implements Engine {
   async isAvailable(): Promise<boolean> {
     const bin = resolveBin('codex')
     if (!bin) return false
-    try {
-      await run(bin, ['login', 'status'], null, 8000)
-      return true
-    } catch {
-      return false
-    }
+    // Spawning `codex login status` (a real auth/token check, not a cheap
+    // --version-style probe) through a Windows .cmd shim proved unreliable —
+    // it never returned within budget even right after a successful
+    // interactive login, permanently stuck on "Sign in needed". auth.json is
+    // the same local source that already powers the account display once
+    // available flips true, so it's an equally trustworthy signal — and a
+    // pure file read, immune to CLI-subprocess flakiness on any platform.
+    return codexAccount() !== null
   }
 
   async complete(messages: EngineMessage[], opts: { timeoutMs?: number; webSearch?: boolean } = {}): Promise<string> {

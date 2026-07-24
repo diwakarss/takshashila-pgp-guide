@@ -55,14 +55,18 @@ export function AiConnect(props: { compact?: boolean; onStatus?: (s: AiStatus) =
   const [status, setStatus] = useState<AiStatus | null>(null)
   const [method, setMethod] = useState<Method | null>(null)
 
-  const refresh = (): void => {
-    void window.pgp.aiStatus().then((s) => {
+  // Returns the in-flight promise so the clicked refresh icon can show a
+  // spinner instead of appearing unresponsive (a real bug once: Codex's old
+  // availability check silently spawned a subprocess for up to 8s).
+  const refresh = (): Promise<void> =>
+    window.pgp.aiStatus().then((s) => {
       setStatus(s)
       onStatus?.(s)
       setMethod((m) => m ?? familyOf(s.activeId))
     })
-  }
-  useEffect(refresh, []) // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    void refresh()
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   const pick = (engineId: string): void => {
     void window.pgp.setSettings({ engineChoice: engineId }).then(refresh)

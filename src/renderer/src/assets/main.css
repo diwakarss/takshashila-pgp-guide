@@ -164,7 +164,7 @@ button.update-pill:disabled {
   cursor: default;
   opacity: 0.8;
 }
-.update-pill .spin {
+.spin {
   animation: pill-spin 1s linear infinite;
 }
 @keyframes pill-spin {

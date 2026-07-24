@@ -38,12 +38,18 @@ export function useHarnesses(): { harnesses: HarnessStatus[] | null; refresh: ()
 export function HarnessCard(props: {
   h: HarnessStatus
   onPick: (id: string) => void
-  onRefresh: () => void
+  onRefresh: () => Promise<void>
   compact?: boolean // wizard mode: no bin-path row
 }): JSX.Element {
   const { h, onPick, onRefresh, compact } = props
   const meta = META[h.id]
   const [signInSent, setSignInSent] = useState(false)
+  const [refreshing, setRefreshing] = useState(false)
+
+  const doRefresh = (): void => {
+    setRefreshing(true)
+    void onRefresh().finally(() => setRefreshing(false))
+  }
 
   const signIn = async (): Promise<void> => {
     const ok = await window.pgp.engineSignIn(h.id)
@@ -131,8 +137,8 @@ export function HarnessCard(props: {
         </p>
       )}
 
-      <button className="icon-btn harness-refresh" title="Re-check" onClick={onRefresh}>
-        <RefreshCw size={13} />
+      <button className="icon-btn harness-refresh" title="Re-check" disabled={refreshing} onClick={doRefresh}>
+        <RefreshCw size={13} className={refreshing ? 'spin' : ''} />
       </button>
     </div>
   )
